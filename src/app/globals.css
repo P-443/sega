@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+  background-image:
+    radial-gradient(60rem 30rem at 80% -10%, rgba(245, 158, 11, 0.08), transparent),
+    radial-gradient(50rem 30rem at 10% 110%, rgba(56, 189, 248, 0.06), transparent);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+/* Thin scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70);
+  border-radius: 999px;
+}
+
+/* Accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus visibility */
+:focus-visible {
+  outline: 2px solid rgb(245 158 11);
+  outline-offset: 2px;
+}

@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GameStatus {
+  WAITING
+  ACTIVE
+  FINISHED
+  ABANDONED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+enum Side {
+  A
+  B
+}
+
+enum WinReason {
+  LINE
+  OPPONENT_LEFT
+  OPPONENT_DISCONNECTED
+  NO_MOVES
+  DRAW_AGREEMENT
+  DRAW_MAX_PLIES
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  displayName  String
+  passwordHash String
+  avatarMime   String?
+  avatarData   Bytes?
+  wins         Int       @default(0)
+  losses       Int       @default(0)
+  draws        Int       @default(0)
+  gamesPlayed  Int       @default(0)
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions          Session[]
+  gamePlayers       GamePlayer[]
+  moves             GameMove[]
+  sentInvitations     Invitation[] @relation("InvitationFrom")
+  receivedInvitations Invitation[] @relation("InvitationTo")
+
+  @@index([lastSeenAt])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  status      GameStatus @default(WAITING)
+  roomCode    String?    @unique
+  // Full engine state snapshot (JSON) — source of truth for reconnect/resume.
+  boardState  Json?
+  currentTurn Side       @default(A)
+  winnerSide  Side?
+  winnerId    String?
+  winReason   WinReason?
+  ply         Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  players GamePlayer[]
+  moves   GameMove[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model GamePlayer {
+  id     String @id @default(cuid())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  side   Side
+
+  @@unique([gameId, userId])
+  @@unique([gameId, side])
+  @@index([userId])
+}
+
+model GameMove {
+  id       String   @id @default(cuid())
+  gameId   String
+  game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId String
+  player   User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stoneId  String
+  fromPos  Int
+  toPos    Int
+  ply      Int
+  createdAt DateTime @default(now())
+
+  @@index([gameId])
+}
+
+model Invitation {
+  id         String           @id @default(cuid())
+  fromUserId String
+  fromUser   User             @relation("InvitationFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     User             @relation("InvitationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  status     InvitationStatus @default(PENDING)
+  gameId     String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+}

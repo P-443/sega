@@ -1,0 +1,46 @@
+{
+  "name": "egyptian-sega-3x3",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Egyptian Sega 3x3 — real-time multiplayer web game (Next.js + Socket.IO + PostgreSQL)",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development tsx watch server.ts",
+    "build": "next build && node scripts/build-server.mjs",
+    "start": "cross-env NODE_ENV=production node dist/server.cjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "next": "^15.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
+    "esbuild": "^0.24.2",
+    "postcss": "^8.4.49",
+    "prisma": "^6.5.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
