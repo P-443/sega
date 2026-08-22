@@ -53,7 +53,8 @@ function startEmbeddedPostgres() {
   }
   const start = sh(join(PG_BIN, 'pg_ctl'), [
     '-D', PGDATA,
-    '-o', '-c listen_addresses=127.0.0.1 -p 5432 -k /tmp',
+    // conservative memory settings — the embedded DB shares the VPS with other apps
+    '-o', '-c listen_addresses=127.0.0.1 -p 5432 -k /tmp -c shared_buffers=32MB -c max_connections=20',
     '-w', '-t', '60',
     'start',
   ], true);
