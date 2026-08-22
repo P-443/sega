@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { presence } from '@/server/presence';
+import { BOT_USERNAME } from '@/server/botUser';
 import { jsonError } from '@/lib/http';
 
 export async function GET(req: Request) {
@@ -14,6 +15,8 @@ export async function GET(req: Request) {
   const users = await prisma.user.findMany({
     where: {
       id: { not: user.id },
+      // The bot plays via the "العب ضد التوبور" button — never via an invite.
+      username: { not: BOT_USERNAME },
       OR: [
         { username: { contains: q, mode: 'insensitive' } },
         { displayName: { contains: q, mode: 'insensitive' } },

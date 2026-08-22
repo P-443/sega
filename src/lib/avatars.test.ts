@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AVATAR_ICON_IDS, AVATAR_ICONS, defaultAvatarIcon, resolveAvatarIcon } from './avatars';
 
 describe('default avatar icons', () => {
-  it('every icon has a unique id, label, gradient and at least one path', () => {
+  it('every icon has a unique id, label, gradient and an emoji glyph', () => {
     const ids = new Set<string>();
     for (const icon of AVATAR_ICONS) {
       expect(icon.id).toMatch(/^[a-z]+$/);
@@ -11,7 +11,7 @@ describe('default avatar icons', () => {
       expect(icon.label.length).toBeGreaterThan(1);
       expect(icon.from).toMatch(/^#[0-9a-f]{6}$/i);
       expect(icon.to).toMatch(/^#[0-9a-f]{6}$/i);
-      expect(icon.paths.length).toBeGreaterThan(0);
+      expect(icon.glyph.length).toBeGreaterThan(0);
     }
   });
 

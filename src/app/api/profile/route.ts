@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { updateProfileSchema } from '@/lib/validation';
 import { assertSameOrigin, firstIssue, jsonError } from '@/lib/http';
+import { pushProfileMeta } from '@/server/live';
 
 export async function PATCH(req: Request) {
   if (!assertSameOrigin(req)) return jsonError('طلب مرفوض', 403);
@@ -25,6 +26,12 @@ export async function PATCH(req: Request) {
       // null clears the choice → back to the deterministic default icon
       ...(parsed.data.avatarIcon !== undefined ? { avatarIcon: parsed.data.avatarIcon } : {}),
     },
+  });
+  pushProfileMeta(updated.id, {
+    username: updated.username,
+    displayName: updated.displayName,
+    hasAvatar: updated.avatarData !== null,
+    avatarIcon: updated.avatarIcon,
   });
   return NextResponse.json({ ok: true, displayName: updated.displayName, avatarIcon: updated.avatarIcon });
 }

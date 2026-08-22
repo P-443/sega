@@ -57,16 +57,6 @@ export function otherSide(side: Side): Side {
   return side === 'A' ? 'B' : 'A';
 }
 
-/** 8-direction (king move) adjacency on the 3x3 grid. */
-export function areAdjacent(a: number, b: number): boolean {
-  if (a === b || a < 0 || a > 8 || b < 0 || b > 8) return false;
-  const ar = Math.floor(a / 3);
-  const ac = a % 3;
-  const br = Math.floor(b / 3);
-  const bc = b % 3;
-  return Math.abs(ar - br) <= 1 && Math.abs(ac - bc) <= 1;
-}
-
 export function createInitialState(): EngineState {
   const board: (Stone | null)[] = new Array(BOARD_SIZE).fill(null);
   (['A', 'B'] as Side[]).forEach((side) => {
@@ -100,13 +90,13 @@ export function getStone(state: EngineState, stoneId: string): Stone | null {
   return null;
 }
 
-/** Empty adjacent cells a stone may legally move to. */
+/** Every empty cell is a legal target — free movement, no adjacency rule. */
 export function legalTargetsFor(state: EngineState, stoneId: string): number[] {
   const stone = getStone(state, stoneId);
   if (!stone || state.status !== 'active') return [];
   const targets: number[] = [];
   for (let pos = 0; pos < BOARD_SIZE; pos++) {
-    if (state.board[pos] === null && areAdjacent(stone.pos, pos)) targets.push(pos);
+    if (state.board[pos] === null) targets.push(pos);
   }
   return targets;
 }
@@ -202,7 +192,7 @@ export function applyMove(
   if (!stone) return { ok: false, error: 'stone_not_found' };
   if (stone.side !== side) return { ok: false, error: 'not_your_stone' };
   if (state.board[target] !== null) return { ok: false, error: 'cell_occupied' };
-  if (!areAdjacent(stone.pos, target)) return { ok: false, error: 'not_adjacent' };
+  // Free movement: any empty cell on the board is a legal target.
 
   const blockedBefore = findBlockedLines(state, rules);
 

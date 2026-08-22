@@ -19,10 +19,14 @@ import {
 import { DEFAULT_RULES, type EngineState, type Side } from '@/game/types';
 import {
   MOVE_ERROR_AR,
+  type GamePlayerInfo,
   type GameStatePayload,
   type InvitationPayload,
   type LastMove,
 } from '@/shared/events';
+import { chooseMove, evaluateBoard } from '@/game/ai';
+import { ensureBotUser, botUserId } from './botUser';
+import type { ProfileMeta } from './live';
 import { presence } from './presence';
 
 type EmitFn = (userId: string, event: string, payload: unknown) => void;
@@ -60,6 +64,8 @@ function otherSide(s: Side): Side {
 export class GameManager {
   private games = new Map<string, LiveGame>();
   private inviteTimers = new Map<string, NodeJS.Timeout>();
+  private botTimers = new Map<string, NodeJS.Timeout>();
+  private botIdCache: string | null = null;
 
   constructor(
     private emitToUser: EmitFn,
@@ -67,6 +73,25 @@ export class GameManager {
   ) {}
 
   // ─────────────────────────────── helpers ───────────────────────────────
+
+  /** The bot user id (cached for sync access from toPayload). */
+  private async botId(): Promise<string> {
+    if (this.botIdCache) return this.botIdCache;
+    this.botIdCache = await botUserId();
+    return this.botIdCache;
+  }
+
+  private playerInfo(p: LivePlayer): GamePlayerInfo {
+    return {
+      userId: p.userId,
+      username: p.username,
+      displayName: p.displayName,
+      hasAvatar: p.hasAvatar,
+      avatarIcon: p.avatarIcon,
+      // The bot never holds a socket but must always look online.
+      connected: p.userId === this.botIdCache ? true : p.connected,
+    };
+  }
 
   private toPayload(game: LiveGame, recipientUserId: string | null): GameStatePayload {
     const yourSide: Side | null =
@@ -81,26 +106,8 @@ export class GameManager {
       roomCode: game.roomCode,
       state: game.state,
       players: {
-        A: game.players.A
-          ? {
-              userId: game.players.A.userId,
-              username: game.players.A.username,
-              displayName: game.players.A.displayName,
-              hasAvatar: game.players.A.hasAvatar,
-              avatarIcon: game.players.A.avatarIcon,
-              connected: game.players.A.connected,
-            }
-          : null,
-        B: game.players.B
-          ? {
-              userId: game.players.B.userId,
-              username: game.players.B.username,
-              displayName: game.players.B.displayName,
-              hasAvatar: game.players.B.hasAvatar,
-              avatarIcon: game.players.B.avatarIcon,
-              connected: game.players.B.connected,
-            }
-          : null,
+        A: game.players.A ? this.playerInfo(game.players.A) : null,
+        B: game.players.B ? this.playerInfo(game.players.B) : null,
       },
       yourSide,
       lastMove: game.lastMove,
@@ -135,6 +142,8 @@ export class GameManager {
     if (!row) return null;
 
     const players: LiveGame['players'] = { A: null, B: null };
+    const botId = await this.botId();
+    this.botIdCache = botId;
     for (const gp of row.players) {
       players[gp.side] = {
         userId: gp.userId,
@@ -142,7 +151,7 @@ export class GameManager {
         displayName: gp.user.displayName,
         hasAvatar: gp.user.avatarData !== null,
         avatarIcon: gp.user.avatarIcon,
-        connected: presence.isOnline(gp.userId),
+        connected: gp.userId === botId ? true : presence.isOnline(gp.userId),
       };
     }
 
@@ -466,6 +475,24 @@ export class GameManager {
     const side = this.sideOf(game, user.id);
     if (!side) return { error: 'لست لاعبًا في هذه المباراة' };
 
+    const res = await this.applyMoveToGame(game, side, user.id, stoneId, target);
+    if (res.error) return res;
+
+    // If the opponent is the bot and it's now its turn, schedule the reply.
+    void this.ensureBotMoveScheduled(game);
+    return {};
+  }
+
+  /** Engine-validate, persist and broadcast a move — shared by humans and the bot. */
+  private async applyMoveToGame(
+    game: LiveGame,
+    side: Side,
+    playerId: string,
+    stoneId: string,
+    target: number,
+  ): Promise<{ error?: string }> {
+    if (!game.state) return { error: 'المباراة غير متاحة' };
+
     // Pure engine validation — the only rule authority
     const result = applyMove(game.state, side, stoneId, target, DEFAULT_RULES);
     if (!result.ok) {
@@ -512,7 +539,7 @@ export class GameManager {
         prisma.gameMove.create({
           data: {
             gameId: game.id,
-            playerId: user.id,
+            playerId,
             stoneId,
             fromPos,
             toPos: target,
@@ -596,6 +623,7 @@ export class GameManager {
     const game = await this.getOrLoad(gameId);
     if (!game) return { error: 'المباراة غير موجودة' };
     if (!this.sideOf(game, user.id)) return { error: 'لست لاعبًا في هذه المباراة' };
+    void this.ensureBotMoveScheduled(game);
     return this.toPayload(game, user.id);
   }
 
@@ -612,6 +640,10 @@ export class GameManager {
     }
     if (game.status !== 'active') return {};
 
+    if (this.isBotGame(game)) {
+      await this.abandonNoPenalty(game);
+      return {};
+    }
     await this.finishGame(game, otherSide(side), 'OPPONENT_LEFT');
     return {};
   }
@@ -669,6 +701,20 @@ export class GameManager {
     const side = this.sideOf(game, user.id);
     if (!side) return { error: 'لست لاعبًا في هذه المباراة' };
     if (game.drawOfferFrom === side) return { error: 'أنت عرضت التعادل بالفعل' };
+
+    // The bot auto-answers a draw offer by evaluating its position.
+    if (this.isBotGame(game) && game.state) {
+      if (evaluateBoard(game.state, otherSide(side)) > 0) {
+        this.emitToUser(user.id, 'toast', {
+          kind: 'info',
+          message: 'التوبور رفض التعادل — شايف نفسه كسبان 😤',
+        });
+        return {};
+      }
+      await this.finishGame(game, null, 'DRAW_AGREEMENT');
+      return {};
+    }
+
     game.drawOfferFrom = side;
     this.broadcastState(game);
     return {};
@@ -691,12 +737,25 @@ export class GameManager {
 
   // ─────────────────────────────── rematch ───────────────────────────────
 
-  async rematch(user: User, gameId: string): Promise<{ error?: string }> {
+  async rematch(user: User, gameId: string): Promise<{ gameId?: string; error?: string }> {
     const game = await this.getOrLoad(gameId);
     if (!game || game.status !== 'finished') return { error: 'المباراة لسه شغالة' };
     const side = this.sideOf(game, user.id);
     if (!side) return { error: 'لست لاعبًا في هذه المباراة' };
     if (game.rematchOfferFrom === side) return { error: 'أنت طلبت إعادة بالفعل' };
+
+    // Against the bot a rematch is accepted instantly (human always side A).
+    if (this.isBotGame(game)) {
+      const human = await prisma.user.findUnique({ where: { id: user.id } });
+      if (!human) return { error: 'حصلت مشكلة' };
+      const bot = await ensureBotUser();
+      this.botIdCache = bot.id;
+      const newGame = await this.createGameBetween(human, bot);
+      this.emitToUser(user.id, 'game:start', { gameId: newGame.id });
+      this.broadcastState(newGame);
+      return { gameId: newGame.id };
+    }
+
     game.rematchOfferFrom = side;
     this.broadcastState(game);
     return {};
@@ -741,6 +800,111 @@ export class GameManager {
     return { gameId: newGame.id };
   }
 
+  // ─────────────────────────────── bot ───────────────────────────────
+
+  /** Start a practice match vs the bot — the human always plays side A. */
+  async botStart(user: User): Promise<{ gameId: string } | { error: string }> {
+    if (await this.currentGameIdOf(user.id)) {
+      return { error: 'أنت بالفعل في مباراة أو غرفة — اتركها الأول' };
+    }
+    const bot = await ensureBotUser();
+    this.botIdCache = bot.id;
+    const game = await this.createGameBetween(user, bot);
+    this.emitToUser(user.id, 'game:start', { gameId: game.id });
+    this.broadcastState(game);
+    return { gameId: game.id };
+  }
+
+  private scheduleBotMove(gameId: string): void {
+    if (this.botTimers.has(gameId)) return;
+    // 0.5–1 s — the reply feels deliberate rather than instant.
+    const delay = 500 + Math.random() * 500;
+    const timer = setTimeout(() => {
+      void this.botMove(gameId);
+    }, delay);
+    timer.unref?.();
+    this.botTimers.set(gameId, timer);
+  }
+
+  private async botMove(gameId: string): Promise<void> {
+    this.botTimers.delete(gameId);
+    const game = await this.getOrLoad(gameId);
+    if (!game || game.status !== 'active' || !game.state) return;
+    const botId = await this.botId();
+    const botSide =
+      game.players.A?.userId === botId ? 'A' : game.players.B?.userId === botId ? 'B' : null;
+    if (!botSide || game.state.turn !== botSide) return;
+
+    const mv = chooseMove(game.state, botSide);
+    if (!mv) return; // no legal move — cannot happen while active
+    await this.applyMoveToGame(game, botSide, botId, mv.stoneId, mv.target);
+  }
+
+  /** Start the bot thinking when a resumable match is waiting on it. */
+  private async ensureBotMoveScheduled(game: LiveGame): Promise<void> {
+    if (game.status !== 'active' || !game.state) return;
+    const botId = await this.botId();
+    const botSide =
+      game.players.A?.userId === botId ? 'A' : game.players.B?.userId === botId ? 'B' : null;
+    if (!botSide || game.state.turn !== botSide) return;
+    this.scheduleBotMove(game.id);
+  }
+
+  private isBotGame(game: LiveGame): boolean {
+    return (
+      game.players.A?.userId === this.botIdCache || game.players.B?.userId === this.botIdCache
+    );
+  }
+
+  /** End a bot practice match without recording a win/loss for either side. */
+  private async abandonNoPenalty(game: LiveGame): Promise<void> {
+    game.status = 'abandoned';
+    game.endInfo = { winnerUserId: null, winnerSide: null, reason: 'abandoned' };
+    this.clearGameTimers(game);
+    this.botTimers.delete(game.id);
+    try {
+      await prisma.game.update({
+        where: { id: game.id },
+        data: { status: 'ABANDONED', finishedAt: new Date() },
+      });
+    } catch (err) {
+      console.error('[game] abandon persist failed', err);
+    }
+    for (const s of ['A', 'B'] as Side[]) {
+      const p = game.players[s];
+      if (p) {
+        presence.setInGame(p.userId, false);
+        this.notifyPresence(p.userId);
+      }
+    }
+    this.broadcastState(game);
+  }
+
+  /** End an active game when a player fails to return in the grace window. */
+  private async endGameOnDisconnect(game: LiveGame, offlineSide: Side): Promise<void> {
+    if (this.isBotGame(game)) {
+      // Practice vs the bot — a disconnect never counts as a loss.
+      await this.abandonNoPenalty(game);
+    } else {
+      await this.finishGame(game, otherSide(offlineSide), 'OPPONENT_DISCONNECTED');
+    }
+  }
+
+  /** Push a profile update into every live game this user is part of. */
+  refreshPlayerMeta(userId: string, meta: ProfileMeta): void {
+    for (const game of this.games.values()) {
+      const side = this.sideOf(game, userId);
+      if (!side) continue;
+      const p = game.players[side];
+      if (!p) continue;
+      p.username = meta.username;
+      p.displayName = meta.displayName;
+      p.hasAvatar = meta.hasAvatar;
+      p.avatarIcon = meta.avatarIcon;
+      if (game.status === 'active' || game.status === 'waiting') this.broadcastState(game);
+    }
+  }
+
   // ─────────────────────────────── connection lifecycle ───────────────────────────────
 
   /** User lost their last socket — start grace timers for their active games. */
@@ -770,7 +934,7 @@ export class GameManager {
       }
 
       const timer = setTimeout(() => {
-        void this.finishGame(game, otherSide(side), 'OPPONENT_DISCONNECTED');
+        void this.endGameOnDisconnect(game, side);
       }, DISCONNECT_GRACE_SECONDS * 1000);
       timer.unref?.();
       game.disconnectTimers[side] = timer;
@@ -796,7 +960,10 @@ export class GameManager {
           }
         }
       }
-      if (game.status === 'active') this.broadcastState(game);
+      if (game.status === 'active') {
+        this.broadcastState(game);
+        void this.ensureBotMoveScheduled(game);
+      }
     }
   }
 }

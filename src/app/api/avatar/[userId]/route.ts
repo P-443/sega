@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
   return new Response(new Uint8Array(user.avatarData), {
     headers: {
       'Content-Type': user.avatarMime,
-      'Cache-Control': 'public, max-age=300',
+      'Cache-Control': 'public, max-age=30',
       'X-Content-Type-Options': 'nosniff',
     },
   });

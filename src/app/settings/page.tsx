@@ -169,11 +169,9 @@ export default function SettingsPage() {
                   className="flex h-10 w-10 items-center justify-center rounded-full"
                   style={{ backgroundImage: `linear-gradient(135deg, ${icon.from}, ${icon.to})` }}
                 >
-                  <svg viewBox="0 0 24 24" className="h-6 w-6 text-white" aria-hidden>
-                    {icon.paths.map((p, i) => (
-                      <path key={i} d={p.d} fill="currentColor" fillOpacity={p.opacity ?? 1} fillRule="evenodd" />
-                    ))}
-                  </svg>
+                  <span className="text-xl leading-none drop-shadow-sm" aria-hidden>
+                    {icon.glyph}
+                  </span>
                 </span>
                 <span className="text-[10px] font-semibold text-zinc-400">{icon.label}</span>
               </button>

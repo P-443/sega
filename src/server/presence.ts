@@ -65,6 +65,12 @@ class PresenceManager {
     return this.metaByUser.get(userId) ?? null;
   }
 
+  /** Update a connected user's cached meta in place (profile/avatar change). */
+  updateMeta(userId: string, meta: UserMeta): void {
+    if (!this.metaByUser.has(userId)) return;
+    this.metaByUser.set(userId, meta);
+  }
+
   /** Returns the status if it CHANGED since last broadcast (and records it). */
   changedStatus(userId: string): PresenceStatus | null {
     const current = this.statusOf(userId);

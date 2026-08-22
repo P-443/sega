@@ -13,6 +13,7 @@ import { prisma } from '@/lib/db';
 import type { ClientEvents, ServerEvents } from '@/shared/events';
 import { GameManager } from './gameManager';
 import { presence } from './presence';
+import { registerLiveBridge } from './live';
 
 type IO = Server<ClientEvents, ServerEvents>;
 
@@ -158,6 +159,7 @@ export function attachSocketServer(httpServer: HttpServer): IO {
     on('game:rematch-respond', { limit: 10, windowMs: 60_000 }, async (p, u) =>
       games.rematchRespond(u, String(p?.gameId ?? ''), p?.accept === true),
     );
+    on('bot:start', { limit: 8, windowMs: 60_000 }, async (_p, u) => games.botStart(u));
 
     // ── Presence ──
     on('presence:list', { limit: 20, windowMs: 10_000 }, async () => ({ list: presence.listOnline() }));
@@ -178,6 +180,22 @@ export function attachSocketServer(httpServer: HttpServer): IO {
         games.onUserOffline(user.id);
       }
     });
+  });
+
+  // Live profile-meta bridge: profile/avatar API routes (a separate module
+  // instance under Next.js) dispatch here via globalThis so connected users
+  // and live games reflect display-name / avatar changes immediately.
+  registerLiveBridge((userId, meta) => {
+    presence.updateMeta(userId, meta);
+    games.refreshPlayerMeta(userId, meta);
+    if (presence.isOnline(userId)) {
+      broadcast('presence:update', {
+        userId,
+        username: meta.username,
+        displayName: meta.displayName,
+        status: presence.statusOf(userId),
+      });
+    }
   });
 
   return io;

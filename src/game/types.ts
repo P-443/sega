@@ -72,8 +72,7 @@ export type MoveErrorCode =
   | 'stone_not_found'
   | 'not_your_stone'
   | 'invalid_target'
-  | 'cell_occupied'
-  | 'not_adjacent';
+  | 'cell_occupied';
 
 export interface MoveEvents {
   /** Set when this move wins the game */

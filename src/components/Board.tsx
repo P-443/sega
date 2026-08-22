@@ -58,31 +58,73 @@ function KhawajaBadge() {
 }
 
 /**
- * A real brick. Each player's three bricks share one material:
- *   side A → red fired clay (طوب أحمر) · side B → white limestone (طوب أبيض)
- * 3D look is pure CSS: top bevel highlight, bottom thickness shadow, strata.
+ * A real brick, drawn as a three-face SVG: light top surface, mid-tone front
+ * face, dark side face. Side A → red fired clay (cracks + mud dots + chisel
+ * engraving) · side B → white limestone (fine strata). An oval shadow sits
+ * underneath. No heavy filters — crisp at any size.
  */
 function Brick({ stone, lifted }: { stone: Stone; lifted: boolean }) {
   const clay = stone.side === 'A';
+  const c = clay
+    ? {
+        top: '#e98a61',
+        front: '#be4926',
+        side: '#7d2913',
+        line: '#5b1c0c',
+        crack: 'rgba(255,235,220,0.4)',
+        speck: 'rgba(50,16,8,0.55)',
+      }
+    : {
+        top: '#faf3e0',
+        front: '#e3d4b0',
+        side: '#bca97f',
+        line: '#84734f',
+        crack: 'rgba(255,255,255,0.55)',
+        speck: 'rgba(110,95,60,0.35)',
+      };
+
   return (
     <span
       className={cn(
-        'relative block h-[58%] w-[82%] rounded-md transition-transform duration-150',
-        clay
-          ? 'bg-gradient-to-b from-[#e2704a] via-[#c34e2a] to-[#93311a] ring-1 ring-[#5f1d0d] shadow-[inset_0_2px_0_rgba(255,235,220,0.45),inset_0_-3px_0_rgba(0,0,0,0.4),0_5px_10px_rgba(0,0,0,0.55)]'
-          : 'bg-gradient-to-b from-[#f6eeda] via-[#e0d2b2] to-[#bfae8a] ring-1 ring-[#8a7a58] shadow-[inset_0_2px_0_rgba(255,255,255,0.75),inset_0_-3px_0_rgba(120,100,70,0.5),0_5px_10px_rgba(0,0,0,0.5)]',
+        'relative block h-[64%] w-[90%] transition-transform duration-150',
         lifted && 'scale-110',
       )}
     >
-      {/* baked-clay / limestone strata */}
-      <span
-        className={cn(
-          'pointer-events-none absolute inset-0 rounded-md',
-          clay
-            ? 'bg-[repeating-linear-gradient(0deg,transparent_0px,transparent_5px,rgba(0,0,0,0.09)_5px,rgba(0,0,0,0.09)_6px)]'
-            : 'bg-[repeating-linear-gradient(0deg,transparent_0px,transparent_5px,rgba(120,100,70,0.14)_5px,rgba(120,100,70,0.14)_6px)]',
+      <svg viewBox="0 0 100 56" className="pointer-events-none h-full w-full overflow-visible" aria-hidden>
+        {/* oval shadow */}
+        <ellipse cx="50" cy="51" rx="38" ry="3.2" fill="rgba(0,0,0,0.42)" />
+        {/* top face (light) */}
+        <polygon points="20,16 42,5 90,5 68,16" fill={c.top} stroke={c.line} strokeWidth="1.1" strokeLinejoin="round" />
+        {/* front face */}
+        <polygon points="20,16 68,16 68,47 20,47" fill={c.front} stroke={c.line} strokeWidth="1.1" strokeLinejoin="round" />
+        {/* side face (dark) */}
+        <polygon points="68,16 90,5 90,36 68,47" fill={c.side} stroke={c.line} strokeWidth="1.1" strokeLinejoin="round" />
+
+        {clay ? (
+          <>
+            {/* chisel engraving */}
+            <path d="M23 28 H65" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+            <path d="M23 33 H65" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.35" />
+            <path d="M23 38 H65" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.25" />
+            {/* cracks */}
+            <path d="M31 16 L29 24 L32 32 L29 40 L31 47" fill="none" stroke={c.crack} strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M55 16 L57 23 L54 30" fill="none" stroke={c.crack} strokeWidth="1.1" strokeLinecap="round" />
+            {/* mud dots */}
+            <circle cx="47" cy="22" r="1" fill={c.speck} opacity="0.6" />
+            <circle cx="60" cy="37" r="0.9" fill={c.speck} opacity="0.5" />
+            <circle cx="40" cy="43" r="0.8" fill={c.speck} opacity="0.45" />
+          </>
+        ) : (
+          <>
+            {/* limestone strata */}
+            <path d="M22 27 H66" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.35" />
+            <path d="M22 34 H66" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.28" />
+            <path d="M22 41 H66" stroke={c.speck} strokeWidth="1" strokeLinecap="round" opacity="0.2" />
+            <circle cx="50" cy="23" r="0.8" fill={c.speck} opacity="0.4" />
+            <circle cx="38" cy="40" r="0.7" fill={c.speck} opacity="0.35" />
+          </>
         )}
-      />
+      </svg>
       {!stone.moved && <KhawajaBadge />}
       <span className="sr-only">{stone.moved ? 'طوبة' : 'طوبة خواجة'}</span>
     </span>

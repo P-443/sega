@@ -20,6 +20,13 @@ const sizes = {
   xl: 'h-24 w-24 text-3xl',
 };
 
+const glyphSizes = {
+  sm: 'text-lg',
+  md: 'text-xl',
+  lg: 'text-2xl',
+  xl: 'text-5xl',
+};
+
 /**
  * Avatar: uploaded photo → chosen Egyptian icon → deterministic icon from the
  * username hash. Every account always shows a real picture — never a letter.
@@ -59,11 +66,9 @@ export function Avatar({
       title={icon.label}
       style={{ backgroundImage: `linear-gradient(135deg, ${icon.from}, ${icon.to})` }}
     >
-      <svg viewBox="0 0 24 24" className="h-[62%] w-[62%] text-white drop-shadow-sm" aria-hidden>
-        {icon.paths.map((p, i) => (
-          <path key={i} d={p.d} fill="currentColor" fillOpacity={p.opacity ?? 1} fillRule="evenodd" />
-        ))}
-      </svg>
+      <span className={cn('leading-none drop-shadow-sm', glyphSizes[size])} aria-hidden>
+        {icon.glyph}
+      </span>
     </span>
   );
 }

@@ -14,6 +14,9 @@ import type { GameStatePayload } from '@/shared/events';
 function resultText(p: GameStatePayload, myUserId: string): { title: string; sub: string } {
   const info = p.endInfo;
   if (!info) return { title: '', sub: '' };
+  if (info.reason === 'abandoned') {
+    return { title: 'انتهت المباراة', sub: 'مفيش خسارة — كانت ممارسة ضد التوبور 🤖' };
+  }
   if (info.winnerUserId === null) {
     return {
       title: 'تعادل 🤝',

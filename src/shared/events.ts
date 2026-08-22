@@ -49,7 +49,7 @@ export interface GameStatePayload {
   endInfo: {
     winnerUserId: string | null;
     winnerSide: Side | null;
-    reason: string | null; // 'line' | 'no_moves' | 'max_plies' | 'opponent_left' | 'opponent_disconnected' | 'draw_agreement'
+    reason: string | null; // 'line' | 'no_moves' | 'max_plies' | 'opponent_left' | 'opponent_disconnected' | 'draw_agreement' | 'abandoned'
   } | null;
 }
 
@@ -91,6 +91,7 @@ export interface ClientEvents {
   'game:rematch': (payload: { gameId: string }, ack: (res: Ack) => void) => void;
   'game:rematch-respond': (payload: { gameId: string; accept: boolean }, ack: (res: Ack<{ gameId?: string }>) => void) => void;
   'presence:list': (ack: (res: Ack<{ list: PublicPlayer[] }>) => void) => void;
+  'bot:start': (ack: (res: Ack<{ gameId: string }>) => void) => void;
 }
 
 /** server → client */
@@ -112,5 +113,4 @@ export const MOVE_ERROR_AR: Record<string, string> = {
   not_your_stone: 'ده حجر الخصم، مش حجرك',
   invalid_target: 'الخانة دي مش صالحة',
   cell_occupied: 'الخانة دي مشغولة',
-  not_adjacent: 'لازم تتحرك لخانة مجاورة فاضية',
 };

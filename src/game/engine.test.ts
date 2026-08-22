@@ -13,7 +13,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyMove,
-  areAdjacent,
   checkWinner,
   createInitialState,
   deserializeState,
@@ -97,22 +96,6 @@ describe('initial state', () => {
   });
 });
 
-describe('adjacency', () => {
-  it('king moves in 8 directions', () => {
-    expect(areAdjacent(4, 0)).toBe(true);
-    expect(areAdjacent(4, 8)).toBe(true);
-    expect(areAdjacent(4, 2)).toBe(true);
-    expect(areAdjacent(4, 6)).toBe(true);
-    expect(areAdjacent(0, 8)).toBe(false);
-    expect(areAdjacent(6, 0)).toBe(false);
-    expect(areAdjacent(2, 4)).toBe(true);
-    expect(areAdjacent(2, 8)).toBe(false);
-    expect(areAdjacent(0, 0)).toBe(false);
-    expect(areAdjacent(0, 9)).toBe(false);
-    expect(areAdjacent(-1, 0)).toBe(false);
-  });
-});
-
 describe('move validation', () => {
   it('rejects move when not your turn', () => {
     const s = createInitialState();
@@ -136,10 +119,18 @@ describe('move validation', () => {
     expect(applyMove(s, 'A', 'A0', 7)).toEqual({ ok: false, error: 'cell_occupied' });
   });
 
-  it('rejects non-adjacent target', () => {
+  it('allows moving to ANY empty cell — free movement, no adjacency rule', () => {
     const s = createInitialState();
-    // 6 → 5: empty but two columns away
-    expect(applyMove(s, 'A', 'A0', 5)).toEqual({ ok: false, error: 'not_adjacent' });
+    // 6 → 5: two columns away, still legal
+    const far = applyMove(s, 'A', 'A0', 5);
+    expect(far.ok).toBe(true);
+    // long jump across the whole board
+    const corner = applyMove(buildState('B......AA', { turn: 'A' }), 'A', 'A0', 4);
+    expect(corner.ok).toBe(true);
+    if (corner.ok) {
+      expect(corner.state.board[4]?.id).toBe('A0');
+      expect(corner.state.board[7]).toBeNull();
+    }
   });
 
   it('rejects out-of-range / non-integer targets', () => {
@@ -192,12 +183,14 @@ describe('khawaja (moved flag)', () => {
     expect(getStone(r3.state, 'A0')?.moved).toBe(true);
   });
 
-  it('legal targets are empty adjacent cells only', () => {
+  it('legal targets are ALL empty cells (free movement)', () => {
     const s = createInitialState();
-    // A0 at 6: neighbors 3,4,7 — 7 occupied by A1
-    expect(legalTargetsFor(s, 'A0').sort()).toEqual([3, 4]);
-    // A1 at 7: neighbors 3,4,5,6,8 — 6,8 occupied
+    // A0 at 6: every empty cell — 3,4,5 — is a target, near or far
+    expect(legalTargetsFor(s, 'A0').sort()).toEqual([3, 4, 5]);
     expect(legalTargetsFor(s, 'A1').sort()).toEqual([3, 4, 5]);
+    // mid-game: any of the empties, including the far corners
+    const mid = buildState('BB..A.AA.', { turn: 'A' }); // empties 2,3,5,8
+    expect(legalTargetsFor(mid, 'A0').sort()).toEqual([2, 3, 5, 8]);
   });
 });
 
@@ -321,23 +314,13 @@ describe('diagonal lines (khawaja rule does NOT apply by default)', () => {
 });
 
 describe('endgame conditions', () => {
-  it('player with no legal move loses (classic sega rule)', () => {
-    // B trapped on the top row: middle row fully occupied by A.
-    // A's row is khawaja-blocked (A0 unmoved) so A has NOT won by line.
+  it('with free movement a side always has a legal move (no blockade is possible)', () => {
+    // Old adjacency rules let A trap B on the top row; now B escapes anywhere.
     const s = buildState('BBBAAA...', { turn: 'B', unmoved: [3, 0, 1, 2] });
-    // B to move: every B stone is on row 0, escapes are 3,4,5 — all occupied.
-    expect(hasAnyLegalMove(s, 'B')).toBe(false);
-    // Simulate via engine: A just moved into this position on the previous ply.
-    // Directly verify with applyMove: construct the position one ply earlier.
-    const before = buildState('BBBAA..A.', { turn: 'A', unmoved: [3, 0, 1, 2] });
-    // A2 at 7 → 5 completes the blockade (and the khawaja-blocked row)
-    const r = applyMove(before, 'A', 'A2', 5);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.state.status).toBe('finished');
-    expect(r.state.winner).toBe('A');
-    expect(r.state.endReason).toBe('no_moves');
-    expect(r.events.opponentStuck).toBe(true);
+    expect(hasAnyLegalMove(s, 'B')).toBe(true);
+    expect(legalTargetsFor(s, 'B0').sort()).toEqual([6, 7, 8]);
+    const escape = applyMove(s, 'B', 'B0', 8);
+    expect(escape.ok).toBe(true);
   });
 
   it('reaching maxPlies is a draw', () => {

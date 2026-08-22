@@ -15,6 +15,7 @@
 - 🔌 **Reconnection ذكي**: لو النت فصل، اللعبة مش بتضيع — عندك دقيقة ترجع فيها وتكمل من نفس النقطة.
 - 📊 حسابات، Profiles، إحصائيات (فوز/خسارة/تعادل)، آخر المباريات، Avatars.
 - 🔁 إعادة المباراة بعد انتهائها، وعروض التعادل.
+- 🤖 **العب ضد التوبور**: خصم AI (Minimax + alpha-beta) من اللوبي في أي وقت — بلا خسارة لو انسحبت، وإعادة تلقائية.
 - 📱 Responsive بالكامل (Mobile-first) + دعم لوحة المفاتيح و `prefers-reduced-motion`.
 
 ## 🧱 الـ Tech Stack
@@ -27,7 +28,7 @@
 | Database | PostgreSQL + Prisma ORM |
 | Auth | Username/Password · bcrypt · HTTP-only Session Cookies (DB sessions) |
 | Validation | Zod + تحقق كامل في السيرفر |
-| Tests | Vitest — ‏30 اختبارًا للـ Game Rules Engine |
+| Tests | Vitest — اختبارات وحدة للـ Game Rules Engine والذكاء الاصطناعي |
 | Deploy | Dockerfile Multi-stage جاهز لـ Coolify |
 
 ## 🏗️ المعمارية
@@ -60,7 +61,7 @@ Click/Touch → WebSocket → تحقق السيرفر (Engine) → DB Transactio
 ## 📜 قوانين السيجا الصغيرة (المنفذة في Engine)
 
 - لوحة 3×3، كل لاعب 3 أحجار: A في الصف السفلي، B في العلوي.
-- الحركة: خانة **مجاورة فاضية** واحدة (8 اتجاهات).
+- الحركة: أي خانة **فاضية** على اللوحة (حركة حرة — مفيش قيد مجاورة).
 - الفوز: 3 أحجار على خط — أفقي / رأسي / قطري.
 - **قاعدة الخواجة**: خط أفقي أو رأسي فيه حجر `moved = false` ⇒ **ليس فوزًا**، ويظهر تنبيه للاعب.
 - القطر يُحتسب فوزًا فورًا (قابل للتعديل من `RulesConfig.khawajaBlocksDiagonal`).
@@ -94,7 +95,7 @@ npm run dev
 ## 🧪 الاختبارات
 
 ```bash
-npm test          # 30 اختبارًا: الحركات، الخواجة (أفقي/رأسي/قطري)، الفوز، التعادل، الحصر
+npm test          # اختبارات: الحركات، الخواجة (أفقي/رأسي/قطري)، الفوز، التعادل، الحصر، الذكاء الاصطناعي
 npm run typecheck # فحص TypeScript
 npm run build     # بناء Production كامل
 ```
@@ -186,7 +187,9 @@ docker run -p 3000:3000 \
 
 ```
 src/game/engine.ts        # Game Rules Engine (نقي — قواعد اللعبة كلها)
-src/game/engine.test.ts   # 30 اختبار وحدة
+src/game/engine.test.ts   # اختبارات وحدة للـ Engine
+src/game/ai.ts            # الذكاء الاصطناعي (Minimax + alpha-beta)
+src/server/botUser.ts     # مستخدم التوبور 🤖
 src/server/gameManager.ts # إدارة المباريات: تحقق + تخزين + بث + Reconnect
 src/server/socket.ts      # Socket.IO: مصادقة + Rate limit + توجيه الأحداث
 src/server/presence.ts    # Presence لحظي

@@ -43,6 +43,7 @@ export default function LobbyPage() {
   const [roomCode, setRoomCode] = useState('');
   const [inviting, setInviting] = useState<string | null>(null);
   const [busyRoom, setBusyRoom] = useState(false);
+  const [busyBot, setBusyBot] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Redirect when not logged in
@@ -115,6 +116,18 @@ export default function LobbyPage() {
     setBusyRoom(true);
     const res = await emitAck<{ gameId: string }>('room:join', { code });
     setBusyRoom(false);
+    if (!res.ok || !res.data) {
+      push('error', res.ok ? 'حصلت مشكلة' : res.error);
+      return;
+    }
+    router.push(`/game/${res.data.gameId}`);
+  }
+
+  async function playBot() {
+    if (busyBot) return;
+    setBusyBot(true);
+    const res = await emitAck<{ gameId: string }>('bot:start');
+    setBusyBot(false);
     if (!res.ok || !res.data) {
       push('error', res.ok ? 'حصلت مشكلة' : res.error);
       return;
@@ -208,6 +221,9 @@ export default function LobbyPage() {
             </Button>
           </div>
         </div>
+        <Button variant="secondary" className="mt-2 w-full" onClick={() => void playBot()} disabled={busyBot}>
+          {busyBot ? '…' : 'العب ضد التوبور 🤖'}
+        </Button>
       </Card>
 
       {/* Players */}
