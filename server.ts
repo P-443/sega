@@ -3,6 +3,7 @@
  * Listens on 0.0.0.0 so it works inside Docker / behind Coolify's proxy.
  */
 
+import './src/server/alsPolyfill'; // MUST stay first — installs AsyncLocalStorage before next loads
 import { createServer } from 'node:http';
 import next from 'next';
 import { attachSocketServer } from './src/server/socket';

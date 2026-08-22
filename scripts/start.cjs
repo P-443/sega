@@ -126,6 +126,11 @@ function migrate(attempt) {
     const res = migrate(i);
     if (res === 'ok') {
       console.log('[start] migrations applied — starting server…');
+      // Next 15.5 custom-server: AsyncLocalStorage global must exist before any
+      // next module loads (see src/server/alsPolyfill.ts) — entrypoint guard too.
+      if (typeof globalThis.AsyncLocalStorage !== 'function') {
+        globalThis.AsyncLocalStorage = require('node:async_hooks').AsyncLocalStorage;
+      }
       require('../dist/server.cjs');
       return;
     }
