@@ -25,6 +25,28 @@ if (!process.env.SESSION_SECRET) {
   console.warn('[start]   لتثبيت الجلسات: أضف SESSION_SECRET ثابتًا في Environment Variables.');
 }
 
+let warnedBuildPack = false;
+
+function buildPackHelp() {
+  console.error('');
+  console.error('════════════════════════════════════════════════════════════════');
+  console.error(' [start] لا توجد قاعدة بيانات باسم db على الشبكة.');
+  console.error(' السبب شبه المؤكد: التطبيق في Coolify مضبوط على Build Pack = Dockerfile');
+  console.error(' (في هذه الحالة Coolify يتجاهل docker-compose.yaml ويشغّل التطبيق وحده).');
+  console.error('');
+  console.error(' الحل:');
+  console.error('   1) احذف هذا التطبيق من Coolify (Delete من Danger Zone)');
+  console.error('   2) أنشئ تطبيقًا جديدًا: Public Repository ← https://github.com/P-443/sega');
+  console.error('   3) عند السؤال عن Build Pack اختر: Docker Compose  ← وليس Dockerfile');
+  console.error('   4) Deploy — ستظهر خدمتان: db ثم app');
+  console.error('');
+  console.error(' No "db" host on the network: the Coolify app is still on the');
+  console.error(' "Dockerfile" build pack, so docker-compose.yaml was ignored.');
+  console.error(' Recreate the app with Build Pack = "Docker Compose".');
+  console.error('════════════════════════════════════════════════════════════════');
+  console.error('');
+}
+
 function migrate(attempt) {
   console.log(`[start] applying database migrations… (attempt ${attempt}/${MAX_TRIES})`);
   // --no-install: use the prisma CLI bundled in node_modules (never download at runtime)
@@ -38,6 +60,12 @@ function migrate(attempt) {
   if (r.status === 0) return 'ok';
   // A missing env var can never be fixed by retrying — abort immediately.
   if (/Environment variable not found/.test(out)) return 'fatal-env';
+  // With the compose stack, `db` is healthy BEFORE app starts (depends_on).
+  // P1001 on the very first try therefore means: no compose stack at all.
+  if (!warnedBuildPack && /Can't reach database server at `db:/.test(out)) {
+    warnedBuildPack = true;
+    buildPackHelp();
+  }
   return 'retry';
 }
 
