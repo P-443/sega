@@ -32,14 +32,20 @@ RUN npm ci --omit=dev --no-audit --no-fund && npx prisma generate
 # ── Runtime ──
 FROM node:20-slim AS runner
 # openssl: required at runtime by the Prisma query engine (libssl3)
-RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+# postgresql-15: embedded database so the app runs zero-config even as a
+# single container (Dockerfile build pack). Skipped when DATABASE_URL is set
+# (e.g. the docker-compose stack provides its own db service).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl postgresql-15 \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN groupadd --system app && useradd --system --gid app app
+# /app/pgdata exists (owned by app) so a fresh named volume mounted there
+# inherits writable ownership for the embedded Postgres cluster.
+RUN groupadd --system app && useradd --system --gid app app \
+  && mkdir -p /app/pgdata && chown app:app /app/pgdata
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/dist ./dist
@@ -53,7 +59,7 @@ RUN chown -R app:app /app
 USER app
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Applies `prisma migrate deploy` (with DB boot retry), then runs the server

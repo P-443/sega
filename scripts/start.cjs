@@ -1,21 +1,75 @@
 /**
- * Container entrypoint: fill safe defaults (zero-config deploy), apply Prisma
- * migrations (with retry while the database service boots), then start the
- * app server.
+ * Container entrypoint (zero-config):
+ *
+ *  1) Database
+ *     - DATABASE_URL set   → use it (docker-compose `db` service or external DB).
+ *     - DATABASE_URL unset → boot the PostgreSQL embedded in this image
+ *                            (cluster in PGDATA, loopback only), then use it.
+ *  2) SESSION_SECRET unset → ephemeral random secret (sessions reset on restart).
+ *  3) Apply migrations (retry while the DB boots), then run the app server.
  */
 const { spawnSync } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
+const { existsSync, mkdirSync } = require('node:fs');
+const { join } = require('node:path');
 
 const MAX_TRIES = 12;
 const RETRY_MS = 3000;
 
-// ── Zero-config defaults (overridable via environment) ──────────────────────
-// DATABASE_URL defaults to the bundled Postgres service from docker-compose.yaml
-// (host "db"). Point it elsewhere to use an external database instead.
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'postgresql://sega:sega@db:5432/sega';
-  console.log('[start] DATABASE_URL not set — defaulting to bundled Postgres (postgresql://…@db:5432/sega)');
+const PG_BIN = '/usr/lib/postgresql/15/bin';
+const PGDATA = process.env.PGDATA || '/app/pgdata';
+
+function sh(cmd, args) {
+  const r = spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  return r;
 }
+
+// ── Embedded PostgreSQL (single-container / Dockerfile build pack mode) ─────
+function startEmbeddedPostgres() {
+  console.log('[start] DATABASE_URL not set — starting the embedded PostgreSQL…');
+  if (!existsSync(join(PGDATA, 'PG_VERSION'))) {
+    mkdirSync(PGDATA, { recursive: true });
+    console.log(`[start] initializing database cluster in ${PGDATA}…`);
+    const init = sh(join(PG_BIN, 'initdb'), [
+      '-D', PGDATA, '-U', 'sega', '--auth=trust', '--locale=C', '--encoding=UTF8',
+    ]);
+    if (init.status !== 0) {
+      console.error('[start] FATAL: initdb failed (see above)');
+      process.exit(1);
+    }
+    console.warn('[start] ⚠ قاعدة البيانات مدمجة داخل الحاوية: لتثبيت البيانات بين عمليات النشر');
+    console.warn(`[start]   أضف في Coolify ← Storages ← Volume على المسار ${PGDATA}`);
+    console.warn('[start]   (بدون Volume تُعاد البيانات من الصفر بعد كل redeploy)');
+  }
+  const start = sh(join(PG_BIN, 'pg_ctl'), [
+    '-D', PGDATA,
+    '-o', '-c listen_addresses=127.0.0.1 -p 5432 -k /tmp',
+    '-w', '-t', '60',
+    'start',
+  ]);
+  if (start.status !== 0) {
+    console.error('[start] FATAL: embedded PostgreSQL failed to start (see above)');
+    process.exit(1);
+  }
+  sh(join(PG_BIN, 'createdb'), ['-h', '127.0.0.1', '-U', 'sega', 'sega']); // ok if it already exists
+  process.env.DATABASE_URL = 'postgresql://sega@127.0.0.1:5432/sega';
+  console.log('[start] embedded PostgreSQL is up on 127.0.0.1:5432');
+
+  // Graceful shutdown: flush and stop Postgres when the container is stopped.
+  const shutdown = () => {
+    try { sh(join(PG_BIN, 'pg_ctl'), ['-D', PGDATA, '-m', 'fast', '-w', 'stop']); } catch {}
+    process.exit(0);
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+}
+
+if (!process.env.DATABASE_URL) {
+  startEmbeddedPostgres();
+}
+
 // SESSION_SECRET: never hardcode one. If unset, generate an ephemeral secret —
 // the app works out of the box, but sessions reset on every restart/redeploy.
 // Set a fixed SESSION_SECRET in Coolify env vars to keep users logged in.
@@ -25,24 +79,20 @@ if (!process.env.SESSION_SECRET) {
   console.warn('[start]   لتثبيت الجلسات: أضف SESSION_SECRET ثابتًا في Environment Variables.');
 }
 
-let warnedBuildPack = false;
+let warnedUnreachable = false;
 
-function buildPackHelp() {
+function dbUnreachableHelp() {
   console.error('');
   console.error('════════════════════════════════════════════════════════════════');
-  console.error(' [start] لا توجد قاعدة بيانات باسم db على الشبكة.');
-  console.error(' السبب شبه المؤكد: التطبيق في Coolify مضبوط على Build Pack = Dockerfile');
-  console.error(' (في هذه الحالة Coolify يتجاهل docker-compose.yaml ويشغّل التطبيق وحده).');
+  console.error(' [start] قاعدة البيانات المحددة في DATABASE_URL غير قابلة للوصول.');
+  console.error(' إن كان المضيف هو db: فهذا يعني أن خدمة db غير موجودة —');
+  console.error(' تأكد أن Build Pack = Docker Compose، أو احذف DATABASE_URL');
+  console.error(' ليتم استخدام قاعدة البيانات المدمجة تلقائيًا.');
   console.error('');
-  console.error(' الحل:');
-  console.error('   1) احذف هذا التطبيق من Coolify (Delete من Danger Zone)');
-  console.error('   2) أنشئ تطبيقًا جديدًا: Public Repository ← https://github.com/P-443/sega');
-  console.error('   3) عند السؤال عن Build Pack اختر: Docker Compose  ← وليس Dockerfile');
-  console.error('   4) Deploy — ستظهر خدمتان: db ثم app');
-  console.error('');
-  console.error(' No "db" host on the network: the Coolify app is still on the');
-  console.error(' "Dockerfile" build pack, so docker-compose.yaml was ignored.');
-  console.error(' Recreate the app with Build Pack = "Docker Compose".');
+  console.error(' The database in DATABASE_URL is unreachable. If the host is "db",');
+  console.error(' the compose db service does not exist — either switch the build');
+  console.error(' pack to "Docker Compose", or unset DATABASE_URL to use the');
+  console.error(' embedded PostgreSQL instead.');
   console.error('════════════════════════════════════════════════════════════════');
   console.error('');
 }
@@ -50,21 +100,14 @@ function buildPackHelp() {
 function migrate(attempt) {
   console.log(`[start] applying database migrations… (attempt ${attempt}/${MAX_TRIES})`);
   // --no-install: use the prisma CLI bundled in node_modules (never download at runtime)
-  const r = spawnSync('npx', ['--no-install', 'prisma', 'migrate', 'deploy'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    encoding: 'utf8',
-    shell: process.platform === 'win32',
-  });
+  const r = sh('npx', ['--no-install', 'prisma', 'migrate', 'deploy']);
   const out = `${r.stdout || ''}${r.stderr || ''}`;
-  process.stdout.write(out);
   if (r.status === 0) return 'ok';
   // A missing env var can never be fixed by retrying — abort immediately.
   if (/Environment variable not found/.test(out)) return 'fatal-env';
-  // With the compose stack, `db` is healthy BEFORE app starts (depends_on).
-  // P1001 on the very first try therefore means: no compose stack at all.
-  if (!warnedBuildPack && /Can't reach database server at `db:/.test(out)) {
-    warnedBuildPack = true;
-    buildPackHelp();
+  if (!warnedUnreachable && /Can't reach database server/.test(out)) {
+    warnedUnreachable = true;
+    dbUnreachableHelp();
   }
   return 'retry';
 }

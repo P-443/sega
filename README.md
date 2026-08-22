@@ -123,7 +123,19 @@ docker run -p 3000:3000 \
 
 ## ☁️ النشر على Coolify (خطوة بخطوة)
 
-### الطريقة الأسهل — صفر متغيرات (Docker Compose) ⭐
+يعمل المشروع **بصفر Environment Variables** بأي من المسارين:
+
+### المسار أ — Dockerfile (قاعدة بيانات مدمجة) — يعمل فورًا
+
+إن كان تطبيقك مضبوطًا على **Build Pack: Dockerfile** فلا حاجة لتغيير شيء:
+الصورة تحتوي PostgreSQL مدمجًا يقلع تلقائيًا داخل الحاوية عند غياب `DATABASE_URL`.
+
+- **Deploy** ويعمل مباشرة ✅
+- ⚠️ **حفظ البيانات**: بدون Volume تُعاد قاعدة البيانات من الصفر بعد كل redeploy.
+  لتثبيتها: التطبيق ← **Storages** ← أضف Volume على المسار `/app/pgdata` ← Redeploy.
+- لتثبيت الجلسات: أضف `SESSION_SECRET` ثابتًا (64 hex) في Environment Variables.
+
+### المسار ب — Docker Compose (خدمتان منفصلتان) ⭐ الأفضل للإنتاج
 
 الريبو يحتوي `docker-compose.yaml` فيه **التطبيق + PostgreSQL في حزمة واحدة** —
 القاعدة داخل نفس الـ stack (مخزّنة في Volume دائم) والاتصال داخلي باسم `db`،
@@ -158,7 +170,8 @@ docker run -p 3000:3000 \
 ### ⚠️ أخطاء شائعة عند النشر
 
 - **`P1012: Environment variable not found: DATABASE_URL`** ⇒ تستخدم build pack «Dockerfile» بدون قاعدة مربوطة. الحل الأسهل: بدّل إلى **Docker Compose** (الطريقة الأولى) — أو أضف `DATABASE_URL` كمتغير **runtime** (بدون «Build Variable») ثم Redeploy.
-- **`P1001: Can't reach database server at db:5432`** ⇒ الـ Build Pack ما زال **Dockerfile** — Coolify تجاهل `docker-compose.yaml` وبنى Dockerfile وحده (سترى `docker build -f .../Dockerfile` في السجل وحاوية واحدة فقط). الحل: **Configuration → General → Build Pack → `Docker Compose`** ← Save ← Deploy. علامة النجاح: حاويتان (`db` ثم `app`) في السجل.
+- **`P1001: Can't reach database server at db:5432`** ⇒ عرّفت `DATABASE_URL` بمضيف `db` لكن خدمة `db` غير موجودة (الـ Build Pack ليس Docker Compose). إما أن تبدّل إلى **Docker Compose**، أو **احذف `DATABASE_URL`** لتُستخدم القاعدة المدمجة تلقائيًا.
+- **تُفقد البيانات بعد كل redeploy** ⇒ أنت على وضع القاعدة المدمجة بدون Volume. أضف Storage على `/app/pgdata` (المسار أ)، أو انتقل لمسار Docker Compose.
 - **الدومين لا يعمل / لا شهادة HTTPS** ⇒ تأكد أن الصيغة `https://sega.example.com` (لاحظ `:` بعد https) وأن سجل DNS من نوع `A` يشير إلى IP السيرفر، وأن الدومين مُعيّن على خدمة `app`.
 - **تسجيل الدخول ينسى الجلسات بعد كل نشر** ⇒ أضف `SESSION_SECRET` ثابتًا.
 
