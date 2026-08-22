@@ -19,10 +19,18 @@ const RETRY_MS = 3000;
 const PG_BIN = '/usr/lib/postgresql/15/bin';
 const PGDATA = process.env.PGDATA || '/app/pgdata';
 
-function sh(cmd, args) {
-  const r = spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stderr.write(r.stderr);
+function sh(cmd, args, inherit = false) {
+  // inherit: pipe mode would hang forever for `pg_ctl start` — the postmaster
+  // daemon inherits our stdout/stderr pipes and keeps them open, and spawnSync
+  // waits for pipe EOF, not just process exit. Inherit sends pg output
+  // straight to the container logs instead.
+  const r = spawnSync(cmd, args, inherit
+    ? { stdio: ['ignore', 'inherit', 'inherit'] }
+    : { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  if (!inherit) {
+    if (r.stdout) process.stdout.write(r.stdout);
+    if (r.stderr) process.stderr.write(r.stderr);
+  }
   return r;
 }
 
@@ -48,7 +56,7 @@ function startEmbeddedPostgres() {
     '-o', '-c listen_addresses=127.0.0.1 -p 5432 -k /tmp',
     '-w', '-t', '60',
     'start',
-  ]);
+  ], true);
   if (start.status !== 0) {
     console.error('[start] FATAL: embedded PostgreSQL failed to start (see above)');
     process.exit(1);
@@ -59,7 +67,7 @@ function startEmbeddedPostgres() {
 
   // Graceful shutdown: flush and stop Postgres when the container is stopped.
   const shutdown = () => {
-    try { sh(join(PG_BIN, 'pg_ctl'), ['-D', PGDATA, '-m', 'fast', '-w', 'stop']); } catch {}
+    try { sh(join(PG_BIN, 'pg_ctl'), ['-D', PGDATA, '-m', 'fast', '-w', 'stop'], true); } catch {}
     process.exit(0);
   };
   process.once('SIGTERM', shutdown);
