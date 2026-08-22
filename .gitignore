@@ -31,3 +31,4 @@ coverage/
 .vscode/
 .idea/
 uploads/
+tsconfig.tsbuildinfo
