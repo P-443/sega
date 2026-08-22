@@ -21,6 +21,9 @@ RUN npx prisma generate && npm run build
 
 # ── Production dependencies (lean) ──
 FROM node:20-slim AS prod-deps
+# openssl: Prisma needs it to detect debian-openssl-3.0.x (slim images lack the CLI)
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
@@ -28,6 +31,9 @@ RUN npm ci --omit=dev --no-audit --no-fund && npx prisma generate
 
 # ── Runtime ──
 FROM node:20-slim AS runner
+# openssl: required at runtime by the Prisma query engine (libssl3)
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

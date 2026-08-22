@@ -135,6 +135,12 @@ docker run -p 3000:3000 \
 
 > WebSocket يعمل عبر نفس الدومين والبورت (ترقية الاتصال تمرّ تلقائيًا عبر بروكسي Coolify/Traefik).
 
+### ⚠️ أخطاء شائعة عند النشر
+
+- **`P1012: Environment variable not found: DATABASE_URL`** في سجلات الحاوية ⇒ المتغير غير موجود وقت التشغيل. أضفه من **Environment Variables** وتأكد أن خيار **«Build Variable» غير مفعّل** (تفعيله يجعله متاحًا وقت البناء فقط)، ثم **Redeploy**.
+- **الدومين لا يعمل / لا شهادة HTTPS** ⇒ تأكد أن الصيغة `https://sega.example.com` (لاحظ `:` بعد https) وأن سجل DNS من نوع `A` يشير إلى IP السيرفر.
+- **فشل الـ healthcheck** ⇒ افتح Logs الحاوية؛ السيرفر يطبع رسالة واضحة بالعربية والإنجليزية تشرح الناقص قبل الخروج.
+
 ## 🔐 الأمان
 
 - كلمات السر: **bcrypt** · جلسات DB برموز HMAC-hashed · كوكيز `HttpOnly; SameSite=Lax; Secure`.
