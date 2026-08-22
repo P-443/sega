@@ -33,6 +33,7 @@ export interface MeUser {
   username: string;
   displayName: string;
   hasAvatar: boolean;
+  avatarIcon: string | null;
   wins: number;
   losses: number;
   draws: number;

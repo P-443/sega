@@ -71,6 +71,7 @@ export function attachSocketServer(httpServer: HttpServer): IO {
       username: user.username,
       displayName: user.displayName,
       hasAvatar: user.avatarData !== null,
+      avatarIcon: user.avatarIcon,
     });
     if (becameOnline) {
       prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } }).catch(() => {});

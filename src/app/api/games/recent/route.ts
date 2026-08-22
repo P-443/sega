@@ -13,7 +13,9 @@ export async function GET() {
     take: 10,
     include: {
       players: {
-        include: { user: { select: { id: true, username: true, displayName: true, avatarData: true } } },
+        include: {
+          user: { select: { id: true, username: true, displayName: true, avatarData: true, avatarIcon: true } },
+        },
       },
     },
   });
@@ -35,6 +37,7 @@ export async function GET() {
               username: opponent.user.username,
               displayName: opponent.user.displayName,
               hasAvatar: opponent.user.avatarData !== null,
+              avatarIcon: opponent.user.avatarIcon,
             }
           : null,
       };

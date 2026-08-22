@@ -9,6 +9,7 @@ interface UserMeta {
   username: string;
   displayName: string;
   hasAvatar: boolean;
+  avatarIcon: string | null;
 }
 
 class PresenceManager {
@@ -81,6 +82,7 @@ class PresenceManager {
         username: meta.username,
         displayName: meta.displayName,
         hasAvatar: meta.hasAvatar,
+        avatarIcon: meta.avatarIcon,
         status: this.inGameUsers.has(userId) ? 'in-game' : 'online',
       });
     }

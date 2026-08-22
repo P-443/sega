@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AVATAR_ICON_IDS } from '@/lib/avatars';
 
 // Arabic + Latin letters, digits, underscore — 3..20 chars
 export const usernameSchema = z
@@ -31,6 +32,14 @@ export const loginSchema = z.object({
 
 export const updateProfileSchema = z.object({
   displayName: displayNameSchema.optional(),
+  avatarIcon: z
+    .string()
+    .max(30)
+    .nullable()
+    .optional()
+    .refine((v) => v === undefined || v === null || (AVATAR_ICON_IDS as readonly string[]).includes(v), {
+      message: 'أيقونة غير معروفة',
+    }),
 });
 
 export const changePasswordSchema = z.object({

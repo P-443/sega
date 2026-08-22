@@ -20,7 +20,11 @@ export async function PATCH(req: Request) {
 
   const updated = await prisma.user.update({
     where: { id: user.id },
-    data: { displayName: parsed.data.displayName ?? user.displayName },
+    data: {
+      displayName: parsed.data.displayName ?? user.displayName,
+      // null clears the choice → back to the deterministic default icon
+      ...(parsed.data.avatarIcon !== undefined ? { avatarIcon: parsed.data.avatarIcon } : {}),
+    },
   });
-  return NextResponse.json({ ok: true, displayName: updated.displayName });
+  return NextResponse.json({ ok: true, displayName: updated.displayName, avatarIcon: updated.avatarIcon });
 }

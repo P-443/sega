@@ -7,6 +7,7 @@ import { Board } from '@/components/Board';
 import { useAuth, useToast } from '@/components/providers';
 import { Button, Card, PageShell } from '@/components/ui';
 import { emitAck, getSocket } from '@/lib/socket';
+import { isMuted, setMuted, sounds } from '@/lib/sound';
 import { cn } from '@/lib/utils';
 import type { GameStatePayload } from '@/shared/events';
 
@@ -41,7 +42,9 @@ export default function GamePage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [muted, setMutedState] = useState(false);
   const syncedOnce = useRef(false);
+  const prevSoundRef = useRef<{ myTurn: boolean; finished: boolean } | null>(null);
 
   // Sync on mount + on every (re)connect — the reconnection contract
   useEffect(() => {
@@ -82,6 +85,31 @@ export default function GamePage() {
 
   const mySide = payload?.yourSide ?? null;
   const myTurn = payload?.status === 'active' && payload.state?.turn === mySide;
+
+  // tactile sound feedback on turn change / game end
+  useEffect(() => {
+    if (!payload || !user) return;
+    const finishedNow = payload.status === 'finished' || payload.status === 'abandoned';
+    const prev = prevSoundRef.current;
+    prevSoundRef.current = { myTurn: !!myTurn, finished: finishedNow };
+    if (!prev) return; // first sync — don't blast sounds on page load
+    if (finishedNow && !prev.finished && payload.endInfo) {
+      if (payload.endInfo.winnerUserId === user.id) sounds.win();
+      else if (payload.endInfo.winnerUserId !== null) sounds.lose();
+    } else if (myTurn && !prev.myTurn && !finishedNow) {
+      sounds.turn();
+    }
+  }, [payload, myTurn, user]);
+
+  useEffect(() => {
+    setMutedState(isMuted());
+  }, []);
+
+  function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+  }
 
   const opponent = useMemo(() => {
     if (!payload || !mySide) return null;
@@ -213,7 +241,13 @@ export default function GamePage() {
         <div className="flex min-w-0 items-center gap-3">
           {opponent && (
             <>
-              <Avatar userId={opponent.userId} displayName={opponent.displayName} hasAvatar={opponent.hasAvatar} />
+              <Avatar
+                userId={opponent.userId}
+                displayName={opponent.displayName}
+                hasAvatar={opponent.hasAvatar}
+                avatarIcon={opponent.avatarIcon}
+                username={opponent.username}
+              />
               <div className="min-w-0">
                 <p className="truncate font-bold">{opponent.displayName}</p>
                 <p className={cn('text-xs', opponent.connected ? 'text-emerald-400' : 'text-red-400')}>
@@ -228,6 +262,15 @@ export default function GamePage() {
             دوره
           </span>
         )}
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? 'تشغيل الصوت' : 'كتم الصوت'}
+          title={muted ? 'تشغيل الصوت' : 'كتم الصوت'}
+          className="shrink-0 rounded-full px-2 py-1 text-base transition hover:bg-zinc-800 active:scale-90"
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
       </Card>
 
       {/* turn status */}
@@ -274,7 +317,15 @@ export default function GamePage() {
       {/* my card + actions */}
       <Card className="flex items-center justify-between gap-3 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          {me && <Avatar userId={me.userId} displayName={me.displayName} hasAvatar={me.hasAvatar} />}
+          {me && (
+            <Avatar
+              userId={me.userId}
+              displayName={me.displayName}
+              hasAvatar={me.hasAvatar}
+              avatarIcon={me.avatarIcon}
+              username={me.username}
+            />
+          )}
           <div className="min-w-0">
             <p className="truncate font-bold">{me?.displayName ?? 'أنت'}</p>
             <p className="text-xs text-zinc-400">أنت</p>

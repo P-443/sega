@@ -44,6 +44,8 @@ model User {
   passwordHash String
   avatarMime   String?
   avatarData   Bytes?
+  /** Chosen default icon id (see src/lib/avatars.tsx); null = deterministic by username */
+  avatarIcon   String?
   wins         Int       @default(0)
   losses       Int       @default(0)
   draws        Int       @default(0)

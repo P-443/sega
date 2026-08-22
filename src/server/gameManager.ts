@@ -33,6 +33,7 @@ interface LivePlayer {
   username: string;
   displayName: string;
   hasAvatar: boolean;
+  avatarIcon: string | null;
   connected: boolean;
 }
 
@@ -86,6 +87,7 @@ export class GameManager {
               username: game.players.A.username,
               displayName: game.players.A.displayName,
               hasAvatar: game.players.A.hasAvatar,
+              avatarIcon: game.players.A.avatarIcon,
               connected: game.players.A.connected,
             }
           : null,
@@ -95,6 +97,7 @@ export class GameManager {
               username: game.players.B.username,
               displayName: game.players.B.displayName,
               hasAvatar: game.players.B.hasAvatar,
+              avatarIcon: game.players.B.avatarIcon,
               connected: game.players.B.connected,
             }
           : null,
@@ -138,6 +141,7 @@ export class GameManager {
         username: gp.user.username,
         displayName: gp.user.displayName,
         hasAvatar: gp.user.avatarData !== null,
+        avatarIcon: gp.user.avatarIcon,
         connected: presence.isOnline(gp.userId),
       };
     }
@@ -221,6 +225,7 @@ export class GameManager {
       username: u.username,
       displayName: u.displayName,
       hasAvatar: u.avatarData !== null,
+      avatarIcon: u.avatarIcon,
       connected: true,
     });
 
@@ -313,6 +318,7 @@ export class GameManager {
       username: user.username,
       displayName: user.displayName,
       hasAvatar: user.avatarData !== null,
+      avatarIcon: user.avatarIcon,
       connected: true,
     };
 

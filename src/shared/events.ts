@@ -12,6 +12,7 @@ export interface PublicPlayer {
   username: string;
   displayName: string;
   hasAvatar: boolean;
+  avatarIcon: string | null;
   status: PresenceStatus;
 }
 
@@ -20,6 +21,7 @@ export interface GamePlayerInfo {
   username: string;
   displayName: string;
   hasAvatar: boolean;
+  avatarIcon: string | null;
   connected: boolean;
 }
 

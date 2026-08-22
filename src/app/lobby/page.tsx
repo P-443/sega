@@ -19,7 +19,13 @@ interface RecentGame {
   gameId: string;
   finishedAt: string;
   result: 'win' | 'loss' | 'draw';
-  opponent: { userId: string; username: string; displayName: string; hasAvatar: boolean } | null;
+  opponent: {
+    userId: string;
+    username: string;
+    displayName: string;
+    hasAvatar: boolean;
+    avatarIcon: string | null;
+  } | null;
 }
 
 const RESULT_AR = { win: 'كسبت ✅', loss: 'خسرت ❌', draw: 'تعادل 🤝' } as const;
@@ -143,7 +149,13 @@ export default function LobbyPage() {
       {/* Header */}
       <header className="flex items-center justify-between gap-3">
         <Link href={`/profile/${user.username}`} className="flex min-w-0 items-center gap-3">
-          <Avatar userId={user.id} displayName={user.displayName} hasAvatar={user.hasAvatar} />
+          <Avatar
+            userId={user.id}
+            displayName={user.displayName}
+            hasAvatar={user.hasAvatar}
+            avatarIcon={user.avatarIcon}
+            username={user.username}
+          />
           <div className="min-w-0">
             <p className="truncate font-bold leading-tight">{user.displayName}</p>
             <p className="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -221,7 +233,14 @@ export default function LobbyPage() {
               return (
                 <li key={p.userId} className="flex items-center gap-3 py-2.5">
                   <Link href={`/profile/${p.username}`} className="flex min-w-0 flex-1 items-center gap-3">
-                    <Avatar userId={p.userId} displayName={p.displayName} hasAvatar={p.hasAvatar} size="sm" />
+                    <Avatar
+                      userId={p.userId}
+                      displayName={p.displayName}
+                      hasAvatar={p.hasAvatar}
+                      avatarIcon={p.avatarIcon}
+                      username={p.username}
+                      size="sm"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{p.displayName}</p>
                       <p className="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -279,6 +298,8 @@ export default function LobbyPage() {
                         userId={g.opponent.userId}
                         displayName={g.opponent.displayName}
                         hasAvatar={g.opponent.hasAvatar}
+                        avatarIcon={g.opponent.avatarIcon}
+                        username={g.opponent.username}
                         size="sm"
                       />
                     )}

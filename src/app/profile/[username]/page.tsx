@@ -24,7 +24,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     orderBy: { finishedAt: 'desc' },
     take: 8,
     include: {
-      players: { include: { user: { select: { id: true, username: true, displayName: true, avatarData: true } } } },
+      players: {
+        include: {
+          user: { select: { id: true, username: true, displayName: true, avatarData: true, avatarIcon: true } },
+        },
+      },
     },
   });
 
@@ -38,7 +42,14 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
       </Link>
 
       <Card className="flex items-center gap-4 p-5">
-        <Avatar userId={user.id} displayName={user.displayName} hasAvatar={user.avatarData !== null} size="xl" />
+        <Avatar
+          userId={user.id}
+          displayName={user.displayName}
+          hasAvatar={user.avatarData !== null}
+          avatarIcon={user.avatarIcon}
+          username={user.username}
+          size="xl"
+        />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-extrabold text-zinc-50">{user.displayName}</h1>
           <p className="text-sm text-zinc-400">@{user.username}</p>
@@ -91,6 +102,8 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
                         userId={opp.id}
                         displayName={opp.displayName}
                         hasAvatar={opp.avatarData !== null}
+                        avatarIcon={opp.avatarIcon}
+                        username={opp.username}
                         size="sm"
                       />
                     )}

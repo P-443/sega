@@ -20,6 +20,7 @@ export async function GET() {
       username: user.username,
       displayName: user.displayName,
       hasAvatar: user.avatarData !== null,
+      avatarIcon: user.avatarIcon,
       wins: user.wins,
       losses: user.losses,
       draws: user.draws,

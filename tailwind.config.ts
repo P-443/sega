@@ -16,6 +16,7 @@ const config: Config = {
       },
       animation: {
         'stone-pop': 'stone-pop 150ms ease-out',
+        'stone-settle': 'stone-settle 260ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         'fade-in': 'fade-in 180ms ease-out',
         'slide-up': 'slide-up 200ms ease-out',
         'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
@@ -24,6 +25,12 @@ const config: Config = {
         'stone-pop': {
           '0%': { transform: 'scale(0.6)', opacity: '0.4' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        // brick lands on its square: overshoots big, dips small, settles
+        'stone-settle': {
+          '0%': { transform: 'scale(1.35)' },
+          '55%': { transform: 'scale(0.9)' },
+          '100%': { transform: 'scale(1)' },
         },
         'fade-in': {
           '0%': { opacity: '0' },
