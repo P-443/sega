@@ -101,6 +101,14 @@ npm run build     # بناء Production كامل
 
 ## 🐳 Docker
 
+**الكل في واحد (تطبيق + PostgreSQL) بدون أي إعداد:**
+
+```bash
+docker compose up --build        # http://localhost:3000
+```
+
+**أو صورة التطبيق فقط** (مع قاعدة خارجية):
+
 ```bash
 docker build -t egyptian-sega .
 docker run -p 3000:3000 \
@@ -115,31 +123,43 @@ docker run -p 3000:3000 \
 
 ## ☁️ النشر على Coolify (خطوة بخطوة)
 
-1. **أنشئ خدمة PostgreSQL** في مشروعك على Coolify (Databases → PostgreSQL → Deploy)، وانسخ الـ **Internal URL**.
-2. **Applications → New Application → Public Repository**:
-   - Repository: `https://github.com/<user>/sega`
-   - Branch: `main` · **Build Pack: Dockerfile** · Port: `3000`
-3. **Environment Variables** للتطبيق:
+### الطريقة الأسهل — صفر متغيرات (Docker Compose) ⭐
 
-   | Key | Value |
-   |---|---|
-   | `DATABASE_URL` | الـ Internal URL الخاص بقاعدة PostgreSQL |
-   | `SESSION_SECRET` | ناتج `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-   | `NEXT_PUBLIC_APP_URL` | دومين الموقع العام |
-   | `NODE_ENV` | `production` |
-   | `DISCONNECT_GRACE_SECONDS` | `60` (اختياري) |
+الريبو يحتوي `docker-compose.yaml` فيه **التطبيق + PostgreSQL في حزمة واحدة** —
+القاعدة داخل نفس الـ stack (مخزّنة في Volume دائم) والاتصال داخلي باسم `db`،
+**بدون نسخ أي رابط وبدون أي Environment Variables**:
 
-4. **Domains**: أضف دومينك (مثال `https://sega.example.com`).
-5. **Deploy** — البناء من `Dockerfile`، والـ migrations تتطبق تلقائيًا عند الإقلاع.
-6. تحقق: `https://<domain>/api/health` ⇒ `{"ok":true,"db":"up"}`.
+1. **Applications → New Application → Public Repository**:
+   - Repository: `https://github.com/P-443/sega` · Branch: `main`
+   - **Build Pack: `Docker Compose`** (وليس Dockerfile)
+2. **Deploy** — Coolify يبني التطبيق ويشغّل PostgreSQL تلقائيًا، والـ migrations تتطبق عند الإقلاع.
+3. **Domains**: عيّن دومينك على خدمة **`app`** (بورت 3000) — مثال `https://sega.ar-senik.pro`.
+4. تحقق: `https://<domain>/api/health` ⇒ `{"ok":true,"db":"up"}`.
 
 > WebSocket يعمل عبر نفس الدومين والبورت (ترقية الاتصال تمرّ تلقائيًا عبر بروكسي Coolify/Traefik).
 
+**متغيرات اختيارية** (كلها لها قيم افتراضية تعمل مباشرة):
+
+| Key | متى تضيفها |
+|---|---|
+| `SESSION_SECRET` | مهم: ثابت عشوائي (64 hex) **لتثبيت الجلسات** — بدونه تُصفر الجلسات عند كل إعادة نشر |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | لتغيير بيانات القاعدة الداخلية (غير مكشوفة للعامة أصلًا) |
+| `DATABASE_URL` | فقط إن أردت قاعدة **خارجية** بدل المدمجة |
+| `DISCONNECT_GRACE_SECONDS` | مهلة انقطاع اللاعب قبل خسارته (افتراضي 60) |
+
+### طريقة بديلة: قاعدة PostgreSQL منفصلة + Dockerfile
+
+1. **أنشئ خدمة PostgreSQL** (Databases → PostgreSQL → Deploy) وانسخ الـ **Internal URL**.
+2. أنشئ التطبيق من الريبو بـ **Build Pack: Dockerfile** · Port: `3000`.
+3. أضف `DATABASE_URL` (الـ Internal URL) و`SESSION_SECRET` من **Environment Variables** —
+   وتأكد أن خيار **«Build Variable» غير مفعّل** (تفعيله يجعله وقت البناء فقط).
+4. Domains ثم Deploy.
+
 ### ⚠️ أخطاء شائعة عند النشر
 
-- **`P1012: Environment variable not found: DATABASE_URL`** في سجلات الحاوية ⇒ المتغير غير موجود وقت التشغيل. أضفه من **Environment Variables** وتأكد أن خيار **«Build Variable» غير مفعّل** (تفعيله يجعله متاحًا وقت البناء فقط)، ثم **Redeploy**.
-- **الدومين لا يعمل / لا شهادة HTTPS** ⇒ تأكد أن الصيغة `https://sega.example.com` (لاحظ `:` بعد https) وأن سجل DNS من نوع `A` يشير إلى IP السيرفر.
-- **فشل الـ healthcheck** ⇒ افتح Logs الحاوية؛ السيرفر يطبع رسالة واضحة بالعربية والإنجليزية تشرح الناقص قبل الخروج.
+- **`P1012: Environment variable not found: DATABASE_URL`** ⇒ تستخدم build pack «Dockerfile» بدون قاعدة مربوطة. الحل الأسهل: بدّل إلى **Docker Compose** (الطريقة الأولى) — أو أضف `DATABASE_URL` كمتغير **runtime** (بدون «Build Variable») ثم Redeploy.
+- **الدومين لا يعمل / لا شهادة HTTPS** ⇒ تأكد أن الصيغة `https://sega.example.com` (لاحظ `:` بعد https) وأن سجل DNS من نوع `A` يشير إلى IP السيرفر، وأن الدومين مُعيّن على خدمة `app`.
+- **تسجيل الدخول ينسى الجلسات بعد كل نشر** ⇒ أضف `SESSION_SECRET` ثابتًا.
 
 ## 🔐 الأمان
 

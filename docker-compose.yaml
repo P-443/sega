@@ -1,0 +1,48 @@
+# Zero-config deployment: app + PostgreSQL in ONE stack.
+# No env vars required — everything has a working default, and every value
+# below can be overridden from Coolify → Environment Variables if needed.
+#
+# Coolify: create the app from the repo with Build Pack = "Docker Compose",
+# then assign your domain to the `app` service (port 3000).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sega}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sega}
+      POSTGRES_DB: ${POSTGRES_DB:-sega}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-sega} -d $${POSTGRES_DB:-sega}"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Internal service hostname — the database lives in THIS stack, no link needed.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://sega:sega@db:5432/sega}
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      # SESSION_SECRET is optional: without it the app generates an ephemeral
+      # one at boot (sessions reset on restart). Set it to keep users logged in.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      DISCONNECT_GRACE_SECONDS: ${DISCONNECT_GRACE_SECONDS:-60}
+    expose:
+      - "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,35 +1,28 @@
 /**
- * Container entrypoint: validate env, apply Prisma migrations (with retry
- * while the database service boots), then start the app server.
+ * Container entrypoint: fill safe defaults (zero-config deploy), apply Prisma
+ * migrations (with retry while the database service boots), then start the
+ * app server.
  */
 const { spawnSync } = require('node:child_process');
+const { randomBytes } = require('node:crypto');
 
 const MAX_TRIES = 12;
 const RETRY_MS = 3000;
 
-function envHelp(missing) {
-  console.error('');
-  console.error('════════════════════════════════════════════════════════════════');
-  console.error(` [start] FATAL: missing required environment variable(s): ${missing.join(', ')}`);
-  console.error('');
-  console.error(' متغيرات البيئة المطلوبة غير موجودة داخل الحاوية.');
-  console.error(' الحل في Coolify:');
-  console.error('   1) افتح التطبيق ← Environment Variables');
-  console.error(`   2) أضف: ${missing.join(', ')}`);
-  console.error('   3) تأكد أن خيار "Build Variable" غير مفعّل (متغير وقت التشغيل)');
-  console.error('   4) اضغط Redeploy');
-  console.error('');
-  console.error(' Add them in Coolify → app → Environment Variables (runtime,');
-  console.error(' NOT "Build Variable"), then Redeploy.');
-  console.error('════════════════════════════════════════════════════════════════');
-  console.error('');
+// ── Zero-config defaults (overridable via environment) ──────────────────────
+// DATABASE_URL defaults to the bundled Postgres service from docker-compose.yaml
+// (host "db"). Point it elsewhere to use an external database instead.
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://sega:sega@db:5432/sega';
+  console.log('[start] DATABASE_URL not set — defaulting to bundled Postgres (postgresql://…@db:5432/sega)');
 }
-
-// ── Pre-flight: fail fast with clear guidance instead of 12 pointless retries ──
-const missing = ['DATABASE_URL', 'SESSION_SECRET'].filter((k) => !process.env[k]);
-if (missing.length) {
-  envHelp(missing);
-  process.exit(1);
+// SESSION_SECRET: never hardcode one. If unset, generate an ephemeral secret —
+// the app works out of the box, but sessions reset on every restart/redeploy.
+// Set a fixed SESSION_SECRET in Coolify env vars to keep users logged in.
+if (!process.env.SESSION_SECRET) {
+  process.env.SESSION_SECRET = randomBytes(32).toString('hex');
+  console.warn('[start] ⚠ SESSION_SECRET not set — using an ephemeral secret (sessions reset on restart).');
+  console.warn('[start]   لتثبيت الجلسات: أضف SESSION_SECRET ثابتًا في Environment Variables.');
 }
 
 function migrate(attempt) {
@@ -57,7 +50,7 @@ function migrate(attempt) {
       return;
     }
     if (res === 'fatal-env') {
-      envHelp(['DATABASE_URL']);
+      console.error('[start] FATAL: a required environment variable is missing (see above) — exiting');
       process.exit(1);
     }
     if (i < MAX_TRIES) {
