@@ -74,14 +74,14 @@ function finishedScore(state: EngineState, side: Side): number | null {
  */
 function countThreats(state: EngineState, side: Side): number {
   let threats = 0;
-  for (const { cells, type } of LINES) {
+  for (const { cells } of LINES) {
     const stones = cells.map((c) => state.board[c]);
     if (stones.some((s) => s && s.side !== side)) continue; // opponent occupies it
     const mine = stones.filter((s): s is NonNullable<typeof s> => !!s && s.side === side);
     const empties = cells.filter((_, i) => stones[i] === null).length;
     if (mine.length !== 2 || empties !== 1) continue;
-    // Horizontal/vertical lines still containing a khawaja stone never count.
-    if (type !== 'diagonal' && mine.some((s) => !s.moved)) continue;
+    // Any line still containing a khawaja stone never counts — diagonals too.
+    if (mine.some((s) => !s.moved)) continue;
     threats++;
   }
   return threats;

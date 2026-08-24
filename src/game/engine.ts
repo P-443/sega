@@ -152,8 +152,8 @@ export function findBlockedLines(state: EngineState, rules: RulesConfig = DEFAUL
 
 /**
  * Win check. A line of three same-side stones wins, EXCEPT:
- *  - horizontal/vertical lines containing a khawaja stone (moved=false) — blocked;
- *  - diagonals count immediately unless rules.khawajaBlocksDiagonal is enabled.
+ *  - any line (horizontal / vertical / diagonal) containing a khawaja stone
+ *    (moved=false) is blocked and does NOT count as a win.
  */
 export function checkWinner(
   state: EngineState,

@@ -285,31 +285,38 @@ describe('khawaja rule — vertical lines', () => {
   });
 });
 
-describe('diagonal lines (khawaja rule does NOT apply by default)', () => {
-  it('diagonal wins even with a khawaja stone (default rules)', () => {
+describe('diagonal lines (khawaja rule applies by default)', () => {
+  it('diagonal with a khawaja stone is NOT a win', () => {
     // A on main diagonal 0,4,8 — stone at 0 is khawaja; B at 1,2,5
     const s = buildState('ABB.AB..A', { turn: 'B', unmoved: [0] });
+    expect(checkWinner(s)).toBeNull();
+    const blocked = findBlockedLines(s);
+    const d = blocked.find((b) => b.type === 'diagonal');
+    expect(d).toBeDefined();
+    expect(d?.line).toEqual([0, 4, 8]);
+    expect(d?.unmovedStoneIds).toEqual(['A0']);
+  });
+
+  it('anti-diagonal (2,4,6) is also blocked with a khawaja stone', () => {
+    // A at 2,4,6 — khawaja at 6; B at 0,1,7
+    const s = buildState('BBA.A.AB.', { turn: 'B', unmoved: [6] });
+    expect(checkWinner(s)).toBeNull();
+    const blocked = findBlockedLines(s);
+    expect(blocked.some((b) => b.type === 'diagonal' && b.line.join(',') === '2,4,6')).toBe(true);
+  });
+
+  it('diagonal wins once every stone has moved', () => {
+    const s = buildState('ABB.AB..A', { turn: 'B' }); // all moved
     const win = checkWinner(s);
-    expect(win).not.toBeNull();
     expect(win?.winner).toBe('A');
     expect(win?.type).toBe('diagonal');
     expect(win?.line).toEqual([0, 4, 8]);
   });
 
-  it('anti-diagonal (2,4,6) also wins with a khawaja stone', () => {
-    // A at 2,4,6 — khawaja at 6; B at 0,1,7
-    const s = buildState('BBA.A.AB.', { turn: 'B', unmoved: [6] });
-    const win = checkWinner(s);
-    expect(win?.type).toBe('diagonal');
-    expect(win?.line).toEqual([2, 4, 6]);
-  });
-
-  it('is blocked too when rules.khawajaBlocksDiagonal = true', () => {
-    const rules: RulesConfig = { ...DEFAULT_RULES, khawajaBlocksDiagonal: true };
+  it('diagonal still wins when rules.khawajaBlocksDiagonal = false (legacy)', () => {
+    const rules: RulesConfig = { ...DEFAULT_RULES, khawajaBlocksDiagonal: false };
     const s = buildState('ABB.AB..A', { turn: 'B', unmoved: [0], rules });
-    expect(checkWinner(s, rules)).toBeNull();
-    const blocked = findBlockedLines(s, rules);
-    expect(blocked.some((b) => b.type === 'diagonal')).toBe(true);
+    expect(checkWinner(s, rules)).not.toBeNull();
   });
 });
 
@@ -364,28 +371,28 @@ describe('serialization', () => {
 });
 
 describe('full game scenario (integration)', () => {
-  it('plays a realistic game to a vertical win', () => {
+  it('plays a realistic game to a horizontal win', () => {
     let s = createInitialState();
     const seq: [Side, string, number][] = [
       ['A', 'A0', 3], // A: 6→3
       ['B', 'B0', 4], // B: 0→4
       ['A', 'A0', 0], // A: 3→0
       ['B', 'B0', 3], // B: 4→3
-      ['A', 'A1', 4], // A: 7→4
-      ['B', 'B1', 5], // B: 1→5
-      ['A', 'A2', 7], // A: 8→7
-      ['B', 'B1', 8], // B: 5→8
-      ['A', 'A1', 1], // A: 4→1 — column? A at 0,1: no. keep playing
-      ['B', 'B2', 2], // B: 2→? 2 occupied... choose 5: B2 2→5? wait 5 empty now
+      ['A', 'A1', 4], // A: 7→4  (diagonal 0-4-8 blocked: A2 still khawaja)
+      ['B', 'B1', 7], // B: 1→7
+      ['A', 'A1', 1], // A: 4→1
+      ['B', 'B2', 4], // B: 2→4
+      ['A', 'A2', 2], // A: 8→2  — top row A0,A1,A2 all moved → win
     ];
     for (const [side, stone, target] of seq) {
       const r = applyMove(s, side, stone, target);
       expect(r.ok).toBe(true);
       if (!r.ok) throw new Error(`unexpected illegal move ${stone}→${target}`);
       s = r.state;
-      if (s.status === 'finished') break;
     }
-    // The game must remain consistent and never crash mid-sequence
-    expect(['active', 'finished']).toContain(s.status);
+    expect(s.status).toBe('finished');
+    expect(s.winner).toBe('A');
+    expect(s.winType).toBe('horizontal');
+    expect(s.winLine).toEqual([0, 1, 2]);
   });
 });

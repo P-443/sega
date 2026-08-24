@@ -58,9 +58,9 @@ describe('chooseMove', () => {
     expect(chooseMove(finished, 'B')).toBeNull();
   });
 
-  it('takes an immediate winning move (diagonal, despite a khawaja-blocked row)', () => {
-    // B at 0,4,5 — B1 (pos 4) is khawaja. Only the 0-4-8 diagonal wins: B2@5 → 8.
-    const s = buildState('BAAABB...', { turn: 'B', unmoved: [4] });
+  it('takes an immediate winning move (diagonal)', () => {
+    // B at 0,4,5 (all moved) — only the 0-4-8 diagonal wins: B2@5 → 8.
+    const s = buildState('BAAABB...', { turn: 'B' });
     expect(chooseMove(s, 'B')).toEqual({ stoneId: 'B2', target: 8 });
   });
 

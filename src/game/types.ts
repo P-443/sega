@@ -53,7 +53,7 @@ export interface RulesConfig {
   khawajaBlocksHorizontal: boolean;
   /** A completed vertical line with an unmoved (khawaja) stone is NOT a win */
   khawajaBlocksVertical: boolean;
-  /** Same rule for diagonals — off by default (classic Egyptian rule) */
+  /** Same rule for diagonals — on, so a khawaja stone blocks an X line too */
   khawajaBlocksDiagonal: boolean;
   /** Safety cap: game is a draw when ply reaches this */
   maxPlies: number;
@@ -62,7 +62,7 @@ export interface RulesConfig {
 export const DEFAULT_RULES: RulesConfig = {
   khawajaBlocksHorizontal: true,
   khawajaBlocksVertical: true,
-  khawajaBlocksDiagonal: false,
+  khawajaBlocksDiagonal: true,
   maxPlies: 300,
 };
 

@@ -26,6 +26,10 @@ interface BoardProps {
   onTarget: (pos: number) => void;
   lastMoveTo: number | null;
   disabled: boolean;
+  /** Optimistic stone positions (stoneId → logical cell) shown before server echo */
+  optimisticPos?: Record<string, number> | null;
+  /** Khawaja bricks to pulse-highlight (blocked a completed line) */
+  highlightStoneIds?: string[] | null;
 }
 
 interface DragState {
@@ -139,6 +143,8 @@ export function Board({
   onTarget,
   lastMoveTo,
   disabled,
+  optimisticPos,
+  highlightStoneIds,
 }: BoardProps) {
   const myTurn = mySide !== null && state.turn === mySide && state.status === 'active';
   const rotate = mySide === 'B'; // B sees the board flipped so own bricks sit at the bottom
@@ -170,6 +176,17 @@ export function Board({
     () => new Set(stones.filter((s) => !s.moved).map((s) => s.pos)),
     [stones],
   );
+
+  // Winning line endpoints in the visual (rotated) 0..300 coordinate space,
+  // so the slow-motion line lands on the right cells for both perspectives.
+  const winLinePath = useMemo(() => {
+    if (state.status !== 'finished' || !state.winLine || state.winLine.length < 3) return null;
+    const vs = state.winLine.map((p) => (rotate ? 8 - p : p));
+    const c = (vp: number) => ({ x: (vp % 3) * 100 + 50, y: Math.floor(vp / 3) * 100 + 50 });
+    const a = c(vs[0]);
+    const b = c(vs[2]);
+    return { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+  }, [state.status, state.winLine, rotate]);
 
   // Cancel the drag if its brick vanished (state resync mid-drag)
   const liveDrag = drag && stones.some((s) => s.id === drag.stoneId) ? drag : null;
@@ -272,11 +289,13 @@ export function Board({
         {/* bricks layer */}
         <div ref={layerRef} className="pointer-events-none absolute inset-2">
           {stones.map((stone) => {
-            const v = rowCol(mapPos(stone.pos));
+            const renderPos = optimisticPos?.[stone.id] ?? stone.pos;
+            const v = rowCol(mapPos(renderPos));
             const mine = mySide !== null && stone.side === mySide;
             const selectable = myTurn && mine && !disabled;
             const selected = selectedStoneId === stone.id;
             const isDragging = liveDrag?.stoneId === stone.id;
+            const highlighted = !!highlightStoneIds?.includes(stone.id);
             return (
               <div
                 key={stone.id}
@@ -310,11 +329,12 @@ export function Board({
                   className={cn(
                     'group pointer-events-auto flex h-full w-full touch-none items-center justify-center rounded-2xl',
                     selectable && 'cursor-grab active:cursor-grabbing',
+                    highlighted && 'animate-khawaja-warn',
                   )}
                 >
                   {/* keyed by position → the settle animation replays on every move */}
                   <span
-                    key={`${stone.id}:${stone.pos}`}
+                    key={`${stone.id}:${renderPos}`}
                     className={cn(
                       'flex h-full w-full items-center justify-center animate-stone-settle transition-transform duration-150',
                       selectable && 'group-hover:-translate-y-1 group-active:scale-90',
@@ -328,12 +348,36 @@ export function Board({
             );
           })}
         </div>
+
+        {/* winning line — drawn in slow motion once the game is over */}
+        {winLinePath && (
+          <svg
+            viewBox="0 0 300 300"
+            className="pointer-events-none absolute inset-2 z-10 h-full w-full overflow-visible"
+            aria-hidden
+          >
+            <line
+              x1={winLinePath.x1}
+              y1={winLinePath.y1}
+              x2={winLinePath.x2}
+              y2={winLinePath.y2}
+              stroke="#fbbf24"
+              strokeWidth="8"
+              strokeLinecap="round"
+              pathLength={1}
+              strokeDasharray="1"
+              strokeDashoffset="1"
+              className="animate-win-line"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(251,191,36,0.9))' }}
+            />
+          </svg>
+        )}
       </div>
 
       {/* khawaja legend */}
       <p className="mt-2 text-center text-xs text-zinc-500">
         الطوبة اللي عليها <span className="font-bold text-amber-300">خ</span> = خواجة (لسه ماتحركتش، وخانتها مظللة)
-        — خط أفقي أو رأسي فيه خواجة مش بيتحسب فوز
+        — أي خط (أفقي / رأسي / قطري) فيه خواجة مش بيتحسب فوز
       </p>
     </div>
   );

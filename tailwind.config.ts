@@ -20,6 +20,8 @@ const config: Config = {
         'fade-in': 'fade-in 180ms ease-out',
         'slide-up': 'slide-up 200ms ease-out',
         'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
+        'win-line': 'win-line 1.3s ease-out forwards',
+        'khawaja-warn': 'khawaja-warn 1s ease-in-out infinite',
       },
       keyframes: {
         'stone-pop': {
@@ -43,6 +45,16 @@ const config: Config = {
         'pulse-soft': {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.55' },
+        },
+        // winning line draws itself across the board (pathLength normalizes to 1)
+        'win-line': {
+          '0%': { strokeDashoffset: '1' },
+          '100%': { strokeDashoffset: '0' },
+        },
+        // pulsing amber ring around a khawaja brick that blocked a line
+        'khawaja-warn': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(251,191,36,0.65)' },
+          '50%': { boxShadow: '0 0 0 7px rgba(251,191,36,0)' },
         },
       },
     },

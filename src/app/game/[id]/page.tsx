@@ -48,6 +48,13 @@ export default function GamePage() {
   const [muted, setMutedState] = useState(false);
   const syncedOnce = useRef(false);
   const prevSoundRef = useRef<{ myTurn: boolean; finished: boolean } | null>(null);
+  const [optimistic, setOptimistic] = useState<{ stoneId: string; to: number } | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [khawajaHint, setKhawajaHint] = useState<string[] | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockedKeysRef = useRef<Set<string> | null>(null);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync on mount + on every (re)connect — the reconnection contract
   useEffect(() => {
@@ -72,6 +79,10 @@ export default function GamePage() {
       if (p.gameId !== gameId) return;
       setPayload(p);
       setSelected(null);
+      // Server confirmed our move → drop the optimistic override.
+      setOptimistic((cur) =>
+        cur && p.lastMove && p.lastMove.stoneId === cur.stoneId && p.lastMove.to === cur.to ? null : cur,
+      );
     };
     socket.on('connect', onConnect);
     socket.on('game:state', onState);
@@ -81,6 +92,69 @@ export default function GamePage() {
       socket.off('game:state', onState);
     };
   }, [gameId]);
+
+  // Reset per-game local state when the game changes (rematch / navigation)
+  useEffect(() => {
+    setShowResult(false);
+    setOptimistic(null);
+    setKhawajaHint(null);
+    setSelected(null);
+    prevStatusRef.current = null;
+    blockedKeysRef.current = null;
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+  }, [gameId]);
+
+  // Reveal the result overlay — after the winning line draws (line wins only)
+  useEffect(() => {
+    if (!payload) return;
+    const status = payload.status;
+    const wasActive = prevStatusRef.current === 'active';
+    prevStatusRef.current = status;
+    const nowFinished = status === 'finished' || status === 'abandoned';
+    if (!nowFinished) {
+      setShowResult(false);
+      return;
+    }
+    const lineWin =
+      status === 'finished' && payload.endInfo?.reason === 'line' && !!payload.state?.winLine;
+    if (wasActive && lineWin) {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      setShowResult(false);
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = setTimeout(() => {
+        setShowResult(true);
+        revealTimerRef.current = null;
+      }, reduce ? 100 : 1400);
+      return;
+    }
+    if (!revealTimerRef.current) setShowResult(true);
+  }, [payload]);
+
+  // Flag newly-blocked lines (a completed line cancelled by a khawaja brick)
+  useEffect(() => {
+    if (!payload?.state) return;
+    const keys = new Set(payload.state.blockedLines.map((b) => b.line.join(',')));
+    if (blockedKeysRef.current === null) {
+      blockedKeysRef.current = keys; // first sync — ignore pre-existing blocked lines
+      return;
+    }
+    const prev = blockedKeysRef.current;
+    const newlyBlocked = payload.state.blockedLines.filter((b) => !prev.has(b.line.join(',')));
+    blockedKeysRef.current = keys;
+    if (newlyBlocked.length === 0) return;
+    const ids = Array.from(new Set(newlyBlocked.flatMap((b) => b.unmovedStoneIds)));
+    if (ids.length === 0) return;
+    setKhawajaHint(ids);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setKhawajaHint(null), 8000);
+  }, [payload]);
+
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -132,8 +206,13 @@ export default function GamePage() {
       if (!selected) return;
       const stoneId = selected;
       setSelected(null);
+      // Optimistic: land the brick immediately; the server confirms next.
+      setOptimistic({ stoneId, to: pos });
       void emitAck('game:move', { gameId, stoneId, target: pos }).then((res) => {
-        if (!res.ok) push('error', res.error);
+        if (!res.ok) {
+          setOptimistic(null);
+          push('error', res.error);
+        }
       });
     },
     [selected, gameId, push],
@@ -298,8 +377,27 @@ export default function GamePage() {
           onSelectStone={onSelectStone}
           onTarget={onTarget}
           lastMoveTo={payload.lastMove?.to ?? null}
-          disabled={finished}
+          disabled={finished || optimistic !== null}
+          optimisticPos={optimistic ? { [optimistic.stoneId]: optimistic.to } : null}
+          highlightStoneIds={khawajaHint}
         />
+      )}
+
+      {/* khawaja hint — a completed line was cancelled by an unmoved brick */}
+      {khawajaHint && !finished && (
+        <Card className="flex items-center justify-between gap-3 border-amber-500/50 bg-amber-500/5 py-3 animate-slide-up">
+          <p className="text-sm font-bold text-amber-200">
+            ⚠️ فيه طوبة خواجة لسه ماتحركتش — عشان كده الخط اللي عملته مش محسوب فوز
+          </p>
+          <button
+            type="button"
+            onClick={() => setKhawajaHint(null)}
+            aria-label="إغلاق التنبيه"
+            className="shrink-0 rounded-full px-2 py-1 text-amber-300/70 transition hover:bg-amber-500/10 hover:text-amber-200 active:scale-90"
+          >
+            ✕
+          </button>
+        </Card>
       )}
 
       {/* draw offer from opponent */}
@@ -352,7 +450,7 @@ export default function GamePage() {
       </Card>
 
       {/* finished overlay */}
-      {finished && result && (
+      {finished && result && showResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-sm animate-fade-in">
           <Card className="w-full max-w-sm animate-slide-up p-6 text-center">
             <p className="text-2xl font-extrabold text-zinc-50">{result.title}</p>
